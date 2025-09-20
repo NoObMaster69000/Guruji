@@ -76,8 +76,8 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl m-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b dark:border-gray-700 flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">
             Create Knowledge Base
           </h2>
@@ -85,7 +85,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
             <X size={24} />
           </button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="overflow-y-auto p-6">
           {/* Knowledge Base Name */}
           <div className="mb-4">
             <label htmlFor="kbName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -299,7 +299,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
             )}
           </div>
 
-          <div className="flex justify-end space-x-4 mt-6">
+          <div className="flex justify-end space-x-4 pt-6 border-t dark:border-gray-700 -mx-6 px-6 pb-0 sticky bottom-0 bg-white dark:bg-gray-800">
             <button
               type="button"
               onClick={onClose}
@@ -316,6 +316,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
             </button>
           </div>
         </form>
+
       </div>
     </div>
   );
