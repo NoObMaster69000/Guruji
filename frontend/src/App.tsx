@@ -5,6 +5,7 @@ import { PromptModal, PromptTemplate } from './components/PromptModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ToolModal, Tool } from './components/ToolModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
+import { ModelSelectionModal, ModelProvider, ApiKeys } from './components/ModelSelectionModal';
 import { ChatSessionModal } from './components/ChatSessionModal';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,6 +16,14 @@ export interface ChatSession {
   title: string;
   description?: string;
   messages: Message[];
+}
+
+export interface ModelSettings {
+  model: string;
+  temperature: number;
+  timeout: number;
+  max_tokens: number;
+  max_retries: number;
 }
 
 // =================================================================================
@@ -46,6 +55,16 @@ const App: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
+  const [currentModel, setCurrentModel] = useState<ModelProvider>('Gemini');
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({});
+  const [modelSettings, setModelSettings] = useState<ModelSettings>({
+    model: 'gemini-pro',
+    temperature: 0.7,
+    timeout: 120,
+    max_tokens: 1024,
+    max_retries: 2,
+  });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -117,6 +136,8 @@ const App: React.FC = () => {
         body: JSON.stringify({
           session_id: activeChatId,
           message: messageToSend,
+          provider: currentModel,
+          ...modelSettings,
           selected_kbs: selectedKbs,
         }),
       });
@@ -201,6 +222,13 @@ const App: React.FC = () => {
         session.id === sessionData.id ? { ...session, title: sessionData.title, description: sessionData.description } : session
       )
     );
+  };
+
+  const handleSaveModelSelection = (provider: ModelProvider, keys: ApiKeys, settings: ModelSettings) => {
+    setCurrentModel(provider);
+    setApiKeys(keys);
+    setModelSettings(settings);
+    // Here you might want to save keys to localStorage for persistence
   };
 
   const handleClearChat = () => {
@@ -340,6 +368,7 @@ const App: React.FC = () => {
       onUseTool={() => { /* Define what using a tool does */ }}
       onNewKnowledgeBase={() => setIsKbModalOpen(true)}
       selectedKbs={selectedKbs}
+      onOpenModelModal={() => setIsModelModalOpen(true)}
       setSelectedKbs={setSelectedKbs}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : ''}`}>
@@ -380,6 +409,14 @@ const App: React.FC = () => {
         onClose={() => setIsChatModalOpen(false)}
         onSave={handleSaveChat}
         sessionToEdit={chatToEdit}
+      />
+      <ModelSelectionModal
+        isOpen={isModelModalOpen}
+        onClose={() => setIsModelModalOpen(false)}
+        onSave={handleSaveModelSelection}
+        currentModel={currentModel}
+        apiKeys={apiKeys}
+        modelSettings={modelSettings}
       />
       <KnowledgeBaseModal
         isOpen={isKbModalOpen}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, MessageSquare, Search, Trash2, Edit, FileText, Database, ChevronDown, Wrench } from 'lucide-react';
+import { Plus, MessageSquare, Search, Trash2, Edit, FileText, Database, ChevronDown, Wrench, Cpu } from 'lucide-react';
 import emojiRegex from 'emoji-regex';
 import { ChatSession } from '../App';
 import { PromptTemplate } from './PromptModal';
@@ -28,6 +28,7 @@ interface SidebarProps {
   onUseTool: (tool: Tool) => void;
   onNewKnowledgeBase: () => void;
   selectedKbs: string[];
+  onOpenModelModal: () => void;
   setSelectedKbs: (ids: string[]) => void;
 }
 
@@ -53,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onUseTool,
   onNewKnowledgeBase,
   selectedKbs,
+  onOpenModelModal,
   setSelectedKbs,
 }) => {
   const [isChatsVisible, setIsChatsVisible] = useState(true);
@@ -89,10 +91,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 space-y-4">
+      <div className="flex-1 overflow-y-auto px-2">
+        {/* Model Selection Section */}
+        <div className="py-2">
+            <button
+                onClick={onOpenModelModal}
+                className="w-full flex items-center gap-2 p-2 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+                <Cpu size={16} />
+                <span>Model</span>
+            </button>
+        </div>
+
         {/* Chats Section */}
-        <div className="mt-4">
-          <div onClick={() => setIsChatsVisible(!isChatsVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1">
+        <div className="py-2 border-t dark:border-gray-700">
+          <div onClick={() => setIsChatsVisible(!isChatsVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1 mb-1 ">
             <h2 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Chats</h2>
             <ChevronDown size={16} className={`text-gray-500 dark:text-gray-400 transition-transform ${isChatsVisible ? 'rotate-180' : ''}`} />
           </div>
@@ -140,8 +153,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Knowledge Base Section */}
-        <div>
-          <div onClick={() => setIsKbVisible(!isKbVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1">
+        <div className="py-2 border-t dark:border-gray-700">
+          <div onClick={() => setIsKbVisible(!isKbVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1 mb-1">
             <h2 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Knowledge Base</h2>
             <ChevronDown size={16} className={`text-gray-500 dark:text-gray-400 transition-transform ${isKbVisible ? 'rotate-180' : ''}`} />
           </div>
@@ -157,11 +170,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
         </div>
-      </div>
 
-      {/* Tools Hub Section */}
-      <div className="p-2 border-t dark:border-gray-700">
-        <div onClick={() => setIsToolsVisible(!isToolsVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1">
+        <div className="py-2 border-t dark:border-gray-700">
+          <div onClick={() => setIsToolsVisible(!isToolsVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1 mb-1">
           <h2 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Tools Hub</h2>
           <ChevronDown size={16} className={`text-gray-500 dark:text-gray-400 transition-transform ${isToolsVisible ? 'rotate-180' : ''}`} />
         </div>
@@ -193,10 +204,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
           </div>
         )}
-      </div>
+        </div>
 
-      <div className="p-2 border-t dark:border-gray-700">
-        <div onClick={() => setIsPromptsVisible(!isPromptsVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1">
+        <div className="py-2 border-t dark:border-gray-700">
+          <div onClick={() => setIsPromptsVisible(!isPromptsVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1 mb-1">
           <h2 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Prompts Hub</h2>
           <ChevronDown size={16} className={`text-gray-500 dark:text-gray-400 transition-transform ${isPromptsVisible ? 'rotate-180' : ''}`} />
         </div>
@@ -228,6 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
           </div>
         )}
+        </div>
       </div>
     </aside>
   );

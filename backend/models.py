@@ -35,7 +35,12 @@ class ChatRequest(BaseModel):
     """Request model for the /chat endpoint."""
     session_id: str
     message: str
-    agent: Optional[str] = None
+    provider: str # e.g., 'Gemini', 'OpenAI'
+    model: str # e.g., 'gemini-pro', 'gpt-4'
+    temperature: float
+    timeout: int
+    max_tokens: int
+    max_retries: int
     selected_kbs: List[str] = []
 
 class ChatResponse(BaseModel):
