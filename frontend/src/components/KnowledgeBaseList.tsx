@@ -44,7 +44,6 @@ export const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({ selectedKb
 
   return (
     <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
-      <h3 className="text-lg font-bold mb-4 text-gray-800 dark:text-white">Available Knowledge Bases</h3>
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
         <input

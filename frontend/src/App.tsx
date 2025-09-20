@@ -4,7 +4,6 @@ import { ChatView, Message } from './components/ChatView';
 import { PromptModal, PromptTemplate } from './components/PromptModal';
 import { SettingsModal } from './components/SettingsModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
-import { KnowledgeBaseList } from './components/KnowledgeBaseList';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -151,6 +150,12 @@ const App: React.FC = () => {
       );
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      handleSendMessage(e as unknown as FormEvent);
     }
   };
 
