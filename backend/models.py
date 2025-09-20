@@ -36,6 +36,7 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
     agent: Optional[str] = None
+    selected_kbs: List[str] = []
 
 class ChatResponse(BaseModel):
     """Response model for the /chat endpoint."""
@@ -79,3 +80,7 @@ class KnowledgeBaseRequest(BaseModel):
     vector_store: str
     allowed_file_types: List[str]
     parsing_library: str
+    chunking_strategy: str
+    chunk_size: int
+    chunk_overlap: int
+    metadata_strategy: str

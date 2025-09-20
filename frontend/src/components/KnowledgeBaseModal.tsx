@@ -22,6 +22,10 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
   const [allowedFileTypes, setAllowedFileTypes] = useState<string[]>([]);
   const [parsingLibrary, setParsingLibrary] = useState('Docling');
   const [fileMetadata, setFileMetadata] = useState<FileMetadata[]>([]);
+  const [chunkingStrategy, setChunkingStrategy] = useState('Recursive');
+  const [chunkSize, setChunkSize] = useState(1024);
+  const [chunkOverlap, setChunkOverlap] = useState(200);
+  const [metadataStrategy, setMetadataStrategy] = useState('File name, Date of Upload, Document Type');
 
   if (!isOpen) return null;
 
@@ -32,6 +36,10 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
         vectorStore,
         allowedFileTypes,
         parsingLibrary,
+        chunkingStrategy,
+        chunkSize,
+        chunkOverlap,
+        metadataStrategy,
         files: fileMetadata.map(f => f.file),
     };
     onSave(data);
@@ -132,10 +140,69 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
               </div>
           </div>
 
+          {/* Chunking Strategy */}
+          <div className="mb-4">
+            <label htmlFor="chunkingStrategy" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Chunking Strategy
+            </label>
+            <select
+              id="chunkingStrategy"
+              value={chunkingStrategy}
+              onChange={(e) => setChunkingStrategy(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              <option>Recursive</option>
+              <option>Fixed Size</option>
+            </select>
+          </div>
+
+          {/* Chunk Size */}
+          <div className="mb-4">
+            <label htmlFor="chunkSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Chunk Size: <span className="font-semibold">{chunkSize}</span>
+            </label>
+            <input
+              type="range"
+              id="chunkSize"
+              min="128"
+              max="2048"
+              step="128"
+              value={chunkSize}
+              onChange={(e) => setChunkSize(parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+            />
+          </div>
+
+          {/* Chunk Overlap */}
+          <div className="mb-4">
+            <label htmlFor="chunkOverlap" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Chunk Overlap: <span className="font-semibold">{chunkOverlap}</span>
+            </label>
+            <input
+              type="range"
+              id="chunkOverlap"
+              min="0"
+              max="1024"
+              step="64"
+              value={chunkOverlap}
+              onChange={(e) => setChunkOverlap(parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+            />
+          </div>
+
           {/* Meta Data Strategy */}
           <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Meta Data Strategy</label>
-              <p className="text-sm text-gray-500 dark:text-gray-400">File name, Date of Upload, Document Type (Default)</p>
+            <label htmlFor="metadataStrategy" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Meta Data Strategy
+            </label>
+            <input
+              type="text"
+              id="metadataStrategy"
+              value={metadataStrategy}
+              onChange={(e) => setMetadataStrategy(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              placeholder="e.g., 'File name, Author, Date'"
+            />
           </div>
 
 

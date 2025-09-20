@@ -4,6 +4,7 @@ import { ChatView, Message } from './components/ChatView';
 import { PromptModal, PromptTemplate } from './components/PromptModal';
 import { SettingsModal } from './components/SettingsModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
+import { KnowledgeBaseList } from './components/KnowledgeBaseList';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -78,37 +80,7 @@ const App: React.FC = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeChat?.messages, isTyping]);
 
-  // Bot reply simulation
-  useEffect(() => {
-    const messages = activeChat?.messages ?? [];
-    if (messages.length > 0 && messages[messages.length - 1].sender === 'user') {
-      setIsTyping(true);
-      const timer = setTimeout(() => {
-        const lastUserMessage = messages[messages.length - 1].text;
-        const botMessage: Message = {
-          id: Date.now(),
-          text: `Echo: ${lastUserMessage}`,
-          sender: 'bot',
-          timestamp: new Date().toLocaleTimeString(),
-        };
-
-        setChatSessions(prevSessions =>
-          prevSessions.map(session =>
-            session.id === activeChatId
-              ? { ...session, messages: [...session.messages, botMessage] }
-              : session
-          )
-        );
-        setIsTyping(false);
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [activeChat?.messages, activeChatId]);
-
-  // --- Event Handlers ---
-
-  const handleSendMessage = (e: FormEvent) => {
+  const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
     if (input.trim() === '' || !activeChatId) return;
 
@@ -126,12 +98,59 @@ const App: React.FC = () => {
           : session
       )
     );
-    setInput('');
-  };
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSendMessage(e as unknown as FormEvent);
+    const messageToSend = input;
+    setInput('');
+    setIsTyping(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: activeChatId,
+          message: messageToSend,
+          selected_kbs: selectedKbs,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        text: data.reply,
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString(),
+      };
+
+      setChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === activeChatId
+            ? { ...session, messages: [...session.messages, botMessage] }
+            : session
+        )
+      );
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      const errorMessage: Message = {
+        id: Date.now() + 1,
+        text: "Sorry, I couldn't get a response. Please try again.",
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === activeChatId
+            ? { ...session, messages: [...session.messages, errorMessage] }
+            : session
+        )
+      );
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -210,6 +229,10 @@ const App: React.FC = () => {
       vector_store: data.vectorStore,
       allowed_file_types: data.allowedFileTypes,
       parsing_library: data.parsingLibrary,
+      chunking_strategy: data.chunkingStrategy,
+      chunk_size: data.chunkSize,
+      chunk_overlap: data.chunkOverlap,
+      metadata_strategy: data.metadataStrategy,
     };
 
     try {
@@ -261,11 +284,14 @@ const App: React.FC = () => {
       onDeletePrompt={handleDeletePrompt}
       onUsePrompt={handleUsePrompt}
       onNewKnowledgeBase={() => setIsKbModalOpen(true)}
+      selectedKbs={selectedKbs}
+      setSelectedKbs={setSelectedKbs}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : ''}`}>
         <ChatView
           messages={activeChat?.messages ?? []}
           isTyping={isTyping}
+          selectedKbs={selectedKbs}
         input={input}
         setInput={setInput}
         handleSendMessage={handleSendMessage}

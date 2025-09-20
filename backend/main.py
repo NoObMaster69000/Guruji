@@ -80,10 +80,23 @@ def get_session_history(session_id: str) -> List[Message]:
 
 # --- Mock Agent and Tool-Calling Logic ---
 
-def run_agent_logic(agent: AgentDetail, message: str) -> Tuple[str, List[ToolCall]]:
+def run_agent_logic(agent: AgentDetail, message: str, selected_kbs: List[str]) -> Tuple[str, List[ToolCall]]:
     """
     Simulates the agent's logic to generate a reply and decide on tool calls.
     """
+    if selected_kbs:
+        logger.info(f"Selected Knowledge Bases: {selected_kbs}")
+        response_parts = []
+        for kb_id in selected_kbs:
+            if kb_id in KNOWLEDGE_BASES:
+                kb = KNOWLEDGE_BASES[kb_id]
+                response_parts.append(f"In knowledge base '{kb['kb_name']}', I found the following information about '{message}': ...")
+        if response_parts:
+            return "\n".join(response_parts), []
+        else:
+            return f"I could not find any information about '{message}' in the selected knowledge bases.", []
+
+
     tool_calls = []
 
     # A map to connect agent names to their primary tool
@@ -149,7 +162,7 @@ async def chat(request: ChatRequest):
 
     # 2. Select agent and run logic
     agent = select_agent(request.message, request.agent)
-    reply_content, tool_calls = run_agent_logic(agent, request.message)
+    reply_content, tool_calls = run_agent_logic(agent, request.message, request.selected_kbs)
 
     # 3. Add assistant reply to history
     assistant_message = Message(
@@ -201,3 +214,8 @@ async def create_knowledge_base(request: KnowledgeBaseRequest):
     KNOWLEDGE_BASES[kb_id] = request.dict()
     logger.info(f"New Knowledge Base created: {request.kb_name} (ID: {kb_id})")
     return {"message": "Knowledge Base created successfully", "kb_id": kb_id, "data": request.dict()}
+
+@app.get("/kb/list", tags=["Knowledge Base"])
+async def list_knowledge_bases():
+    """Lists all available Knowledge Bases."""
+    return [{"id": kb_id, **kb_data} for kb_id, kb_data in KNOWLEDGE_BASES.items()]
