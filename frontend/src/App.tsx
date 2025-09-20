@@ -5,6 +5,7 @@ import { PromptModal, PromptTemplate } from './components/PromptModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ToolModal, Tool } from './components/ToolModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
+import { ChatSessionModal } from './components/ChatSessionModal';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -12,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 export interface ChatSession {
   id: string;
   title: string;
+  description?: string;
   messages: Message[];
 }
 
@@ -36,6 +38,8 @@ const App: React.FC = () => {
   const [toolToEdit, setToolToEdit] = useState<Tool | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [chatToEdit, setChatToEdit] = useState<ChatSession | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
@@ -186,6 +190,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEditChat = (session: ChatSession) => {
+    setChatToEdit(session);
+    setIsChatModalOpen(true);
+  };
+
+  const handleSaveChat = (sessionData: { id: string; title: string; description?: string }) => {
+    setChatSessions(prev =>
+      prev.map(session =>
+        session.id === sessionData.id ? { ...session, title: sessionData.title, description: sessionData.description } : session
+      )
+    );
+  };
+
   const handleClearChat = () => {
     if (!activeChatId) return;
     setChatSessions(prevSessions =>
@@ -310,6 +327,7 @@ const App: React.FC = () => {
       onNewChat={handleNewChat}
       onSelectChat={handleSelectChat}
       onDeleteChat={handleDeleteChat}
+      onEditChat={handleEditChat}
       promptTemplates={promptTemplates}
       onNewPrompt={openNewPromptModal}
       onEditPrompt={openEditPromptModal}
@@ -356,6 +374,12 @@ const App: React.FC = () => {
         onClose={() => setIsToolModalOpen(false)}
         onSave={handleSaveTool}
         toolToEdit={toolToEdit}
+      />
+      <ChatSessionModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        onSave={handleSaveChat}
+        sessionToEdit={chatToEdit}
       />
       <KnowledgeBaseModal
         isOpen={isKbModalOpen}

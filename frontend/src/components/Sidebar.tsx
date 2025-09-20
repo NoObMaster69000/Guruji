@@ -15,6 +15,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectChat: (id: string) => void;
   onDeleteChat: (id:string) => void;
+  onEditChat: (session: ChatSession) => void;
   promptTemplates: PromptTemplate[];
   onNewPrompt: () => void;
   onEditPrompt: (prompt: PromptTemplate) => void;
@@ -39,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewChat,
   onSelectChat,
   onDeleteChat,
+  onEditChat,
   promptTemplates,
   onNewPrompt,
   onEditPrompt,
@@ -108,18 +110,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
                       <MessageSquare size={16} className="text-gray-600 dark:text-gray-300 flex-shrink-0" />
-                      <span className="text-sm truncate text-gray-800 dark:text-gray-200">{session.title}</span>
+                      <span className="text-sm truncate text-gray-800 dark:text-gray-200" title={session.description}>{session.title}</span>
                   </div>
-                  <button
-                      onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteChat(session.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 ml-2 flex-shrink-0"
-                      aria-label="Delete chat"
-                  >
-                      <Trash2 size={16} />
-                  </button>
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center flex-shrink-0 ml-2">
+                      <button onClick={(e) => {
+                            e.stopPropagation();
+                            onEditChat(session);
+                        }}
+                        className="p-1 text-gray-500 hover:text-blue-500"
+                        aria-label="Edit chat"
+                      >
+                          <Edit size={14} />
+                      </button>
+                      <button
+                          onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteChat(session.id);
+                          }}
+                          className="p-1 text-gray-500 hover:text-red-500"
+                          aria-label="Delete chat"
+                      >
+                          <Trash2 size={14} />
+                      </button>
+                  </div>
                 </div>
               ))}
             </nav>
