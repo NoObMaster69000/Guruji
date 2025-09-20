@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, MessageSquare, Search, Trash2, Edit, FileText, Database, ChevronDown, Wrench, Cpu, Link as LinkIcon, CheckSquare, Square } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Plus, MessageSquare, Search, Trash2, Edit, FileText, Database, ChevronDown, Wrench, Cpu, CheckSquare, Square } from 'lucide-react';
 import emojiRegex from 'emoji-regex';
 import { ChatSession } from '../App';
 import { PromptTemplate } from './PromptModal';
@@ -37,6 +37,7 @@ interface SidebarProps {
   setSelectedDbs: (ids: string[]) => void;
   onConnectDb: (connection: DatabaseConnection) => void;
   onOpenModelModal: () => void;
+  setSidebarWidth: (width: number) => void;
   setSelectedKbs: (ids: string[]) => void;
 }
 
@@ -70,6 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setSelectedDbs,
   onConnectDb,
   onOpenModelModal,
+  setSidebarWidth,
   setSelectedKbs,
 }) => {
   const [isChatsVisible, setIsChatsVisible] = useState(true);
@@ -78,6 +80,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isToolsVisible, setIsToolsVisible] = useState(true);
   const [isDbVisible, setIsDbVisible] = useState(true);
   const [dbSearchTerm, setDbSearchTerm] = useState('');
+  const [width, setWidth] = useState(256);
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  const startResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
+    setIsResizing(true);
+    mouseDownEvent.preventDefault();
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing && sidebarRef.current) {
+        const newWidth = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().left;
+        if (newWidth >= 200 && newWidth <= 500) { // Min and max width
+          setWidth(newWidth);          
+        }
+      }
+    },
+    [isResizing]
+  );
+
+  // Pass width changes to parent
+  useEffect(() => {
+    setSidebarWidth(width);
+  }, [width, setSidebarWidth, resize, stopResizing]);
+
+  useEffect(() => {
+    window.addEventListener('mousemove', resize);
+    window.addEventListener('mouseup', stopResizing);
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   const getFirstEmoji = (text: string): string | null => {
     const regex = emojiRegex();
@@ -98,7 +138,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
 
   return (
-    <aside className={`absolute z-20 h-full flex flex-col bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} w-64`}>
+    <aside
+    ref={sidebarRef}
+    className={`absolute z-20 h-full flex flex-col bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+    style={{ width: `${width}px` }}
+    >
       <div className="p-4">
         <button
           onClick={onNewChat}
@@ -317,6 +361,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
         </div>
       </div>
+      <div 
+        className="absolute top-0 right-0 w-2 h-full cursor-col-resize"
+        onMouseDown={startResizing}
+        title="Resize sidebar"
+      />
     </aside>
   );
 };
