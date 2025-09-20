@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, UploadCloud, File as FileIcon, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, UploadCloud, File as FileIcon, Trash2 } from 'lucide-react';
 
 interface FileMetadata {
     id: string;

@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256); // Add this state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
@@ -404,9 +405,10 @@ const App: React.FC = () => {
       setSelectedDbs={setSelectedDbs}
       onConnectDb={() => { /* Define what connecting to a DB does */ }}
       onOpenModelModal={() => setIsModelModalOpen(true)}
+      setSidebarWidth={setSidebarWidth}
       setSelectedKbs={setSelectedKbs}
       />
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : ''}`}>
+      <div style={{ marginLeft: isSidebarOpen ? sidebarWidth : 0 }} className="flex-1 flex flex-col transition-all duration-300">
         <ChatView
           messages={activeChat?.messages ?? []}
           isTyping={isTyping}

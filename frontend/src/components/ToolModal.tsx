@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Smile, SmilePlus } from 'lucide-react';
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 
 export interface Tool {
   id: string;
@@ -18,12 +17,6 @@ interface ToolModalProps {
 export const ToolModal: React.FC<ToolModalProps> = ({ isOpen, onClose, onSave, toolToEdit }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [activePicker, setActivePicker] = useState<'title' | 'content' | null>(null);
-
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const titleEmojiButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (toolToEdit) {
@@ -35,21 +28,6 @@ export const ToolModal: React.FC<ToolModalProps> = ({ isOpen, onClose, onSave, t
     }
   }, [toolToEdit, isOpen]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node) &&
-        !titleEmojiButtonRef.current?.contains(event.target as Node)
-      ) {
-        setActivePicker(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -57,17 +35,6 @@ export const ToolModal: React.FC<ToolModalProps> = ({ isOpen, onClose, onSave, t
     if (!title.trim() || !content.trim()) return;
     onSave({ id: toolToEdit?.id, title, content });
     onClose();
-  };
-
-  const handleEmojiClick = (emojiData: EmojiClickData, pickerType: 'title' | 'content') => {
-    if (pickerType === 'title') {
-        const newTitle = title + emojiData.emoji;
-        setTitle(newTitle);
-    } else {
-        const newContent = content + emojiData.emoji;
-        setContent(newContent);
-    }
-    setActivePicker(null);
   };
 
   return (
@@ -89,7 +56,6 @@ export const ToolModal: React.FC<ToolModalProps> = ({ isOpen, onClose, onSave, t
             <input
               type="text"
               id="title"
-              ref={titleInputRef}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -103,7 +69,6 @@ export const ToolModal: React.FC<ToolModalProps> = ({ isOpen, onClose, onSave, t
             </label>
             <textarea
               id="content"
-              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
