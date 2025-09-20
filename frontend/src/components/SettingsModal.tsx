@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import Color from 'color';
 import { SketchPicker, ColorResult } from 'react-color';
 
 interface SettingsModalProps {
@@ -114,7 +115,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               onClick={handleSubmit}
               className="px-4 py-2 text-white font-semibold rounded-md transition-colors"
-              style={{ backgroundColor: localColor }}
+              style={{ 
+                backgroundColor: localColor,
+                color: localColor && Color(localColor).isDark() ? 'white' : 'black'
+              }}
             >
               Save Changes
             </button>
