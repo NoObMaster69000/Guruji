@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, MessageSquare, Search, Trash2, Edit, FileText, Database, ChevronDown, Wrench, Cpu } from 'lucide-react';
+import { Plus, MessageSquare, Search, Trash2, Edit, FileText, Database, ChevronDown, Wrench, Cpu, Link as LinkIcon, CheckSquare, Square } from 'lucide-react';
 import emojiRegex from 'emoji-regex';
 import { ChatSession } from '../App';
 import { PromptTemplate } from './PromptModal';
 import { KnowledgeBaseList } from './KnowledgeBaseList';
 import { Tool } from './ToolModal';
+import { DatabaseConnection } from './DatabaseModal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -28,6 +29,13 @@ interface SidebarProps {
   onUseTool: (tool: Tool) => void;
   onNewKnowledgeBase: () => void;
   selectedKbs: string[];
+  dbConnections: DatabaseConnection[];
+  onNewDbConnection: () => void;
+  onEditDbConnection: (connection: DatabaseConnection) => void;
+  onDeleteDbConnection: (id: string) => void;
+  selectedDbs: string[];
+  setSelectedDbs: (ids: string[]) => void;
+  onConnectDb: (connection: DatabaseConnection) => void;
   onOpenModelModal: () => void;
   setSelectedKbs: (ids: string[]) => void;
 }
@@ -54,6 +62,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onUseTool,
   onNewKnowledgeBase,
   selectedKbs,
+  dbConnections,
+  onNewDbConnection,
+  onEditDbConnection,
+  onDeleteDbConnection,
+  selectedDbs,
+  setSelectedDbs,
+  onConnectDb,
   onOpenModelModal,
   setSelectedKbs,
 }) => {
@@ -61,12 +76,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isKbVisible, setIsKbVisible] = useState(true);
   const [isPromptsVisible, setIsPromptsVisible] = useState(true);
   const [isToolsVisible, setIsToolsVisible] = useState(true);
+  const [isDbVisible, setIsDbVisible] = useState(true);
+  const [dbSearchTerm, setDbSearchTerm] = useState('');
 
   const getFirstEmoji = (text: string): string | null => {
     const regex = emojiRegex();
     const match = text.match(regex);
     return match ? match[0] : null;
   };
+
+  const handleSelectDb = (id: string) => {
+    const newSelectedDbs = selectedDbs.includes(id)
+      ? selectedDbs.filter(dbId => dbId !== id)
+      : [...selectedDbs, id];
+    setSelectedDbs(newSelectedDbs);
+  };
+
+  const filteredDbConnections = dbConnections.filter(conn =>
+    conn.name.toLowerCase().includes(dbSearchTerm.toLowerCase())
+  );
+
 
   return (
     <aside className={`absolute z-20 h-full flex flex-col bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} w-64`}>
@@ -167,6 +196,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     Create Vector Store
                 </button>
                 <KnowledgeBaseList selectedKbs={selectedKbs} setSelectedKbs={setSelectedKbs} />
+            </div>
+          )}
+        </div>
+
+        {/* Database Hub Section */}
+        <div className="py-2 border-t dark:border-gray-700">
+          <div onClick={() => setIsDbVisible(!isDbVisible)} className="flex justify-between items-center cursor-pointer px-2 py-1 mb-1">
+            <h2 className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Database Hub</h2>
+            <ChevronDown size={16} className={`text-gray-500 dark:text-gray-400 transition-transform ${isDbVisible ? 'rotate-180' : ''}`} />
+          </div>
+          {isDbVisible && (
+            <div className="space-y-1 mt-2">
+              <button
+                onClick={onNewDbConnection}
+                className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-[--theme-color] text-white hover:opacity-90 transition-colors"
+              >
+                <Plus size={16} />
+                New Connection
+              </button>
+              <div className="relative my-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search connections..."
+                  value={dbSearchTerm}
+                  onChange={(e) => setDbSearchTerm(e.target.value)}
+                  className="w-full p-1.5 pl-8 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                />
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {filteredDbConnections.map(conn => (
+                  <div key={conn.id} className="group flex items-center justify-between p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
+                    <div onClick={() => handleSelectDb(conn.id)} className="flex items-center gap-2 overflow-hidden w-full">
+                      {selectedDbs.includes(conn.id) ? (
+                        <CheckSquare className="text-blue-500 flex-shrink-0" size={18} />
+                      ) : (
+                        <Square className="text-gray-400 flex-shrink-0" size={18} />
+                      )}
+                      <span className="text-sm truncate">{conn.name}</span>
+                    </div>
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center flex-shrink-0 ml-2">
+                      <button onClick={() => onEditDbConnection(conn)} className="p-1 text-gray-500 hover:text-blue-500"><Edit size={14} /></button>
+                      <button onClick={() => onDeleteDbConnection(conn.id)} className="p-1 text-gray-500 hover:text-red-500"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

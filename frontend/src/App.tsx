@@ -6,6 +6,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ToolModal, Tool } from './components/ToolModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
 import { ModelSelectionModal, ModelProvider, ApiKeys } from './components/ModelSelectionModal';
+import { DatabaseModal, DatabaseConnection } from './components/DatabaseModal';
 import { ChatSessionModal } from './components/ChatSessionModal';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
@@ -46,6 +47,9 @@ const App: React.FC = () => {
   const [promptToEdit, setPromptToEdit] = useState<PromptTemplate | null>(null);
   const [toolToEdit, setToolToEdit] = useState<Tool | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+  const [dbConnections, setDbConnections] = useState<DatabaseConnection[]>([]);
+  const [dbConnectionToEdit, setDbConnectionToEdit] = useState<DatabaseConnection | null>(null);
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [chatToEdit, setChatToEdit] = useState<ChatSession | null>(null);
@@ -55,6 +59,7 @@ const App: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
+  const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [currentModel, setCurrentModel] = useState<ModelProvider>('Gemini');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
@@ -231,6 +236,29 @@ const App: React.FC = () => {
     // Here you might want to save keys to localStorage for persistence
   };
 
+  // --- Database Connection Handlers ---
+  const handleSaveDbConnection = (connectionData: Omit<DatabaseConnection, 'id'> & { id?: string }) => {
+    if (connectionData.id) { // Editing
+      setDbConnections(prev => prev.map(c => c.id === connectionData.id ? { ...c, ...connectionData } : c));
+    } else { // Creating
+      setDbConnections(prev => [...prev, { ...connectionData, id: uuidv4() } as DatabaseConnection]);
+    }
+  };
+
+  const handleDeleteDbConnection = (id: string) => {
+    setDbConnections(prev => prev.filter(c => c.id !== id));
+  };
+
+  const openNewDbModal = () => {
+    setDbConnectionToEdit(null);
+    setIsDbModalOpen(true);
+  };
+
+  const openEditDbModal = (connection: DatabaseConnection) => {
+    setDbConnectionToEdit(connection);
+    setIsDbModalOpen(true);
+  };
+
   const handleClearChat = () => {
     if (!activeChatId) return;
     setChatSessions(prevSessions =>
@@ -368,6 +396,13 @@ const App: React.FC = () => {
       onUseTool={() => { /* Define what using a tool does */ }}
       onNewKnowledgeBase={() => setIsKbModalOpen(true)}
       selectedKbs={selectedKbs}
+      dbConnections={dbConnections}
+      onNewDbConnection={openNewDbModal}
+      onEditDbConnection={openEditDbModal}
+      onDeleteDbConnection={handleDeleteDbConnection}
+      selectedDbs={selectedDbs}
+      setSelectedDbs={setSelectedDbs}
+      onConnectDb={() => { /* Define what connecting to a DB does */ }}
       onOpenModelModal={() => setIsModelModalOpen(true)}
       setSelectedKbs={setSelectedKbs}
       />
@@ -409,6 +444,12 @@ const App: React.FC = () => {
         onClose={() => setIsChatModalOpen(false)}
         onSave={handleSaveChat}
         sessionToEdit={chatToEdit}
+      />
+      <DatabaseModal
+        isOpen={isDbModalOpen}
+        onClose={() => setIsDbModalOpen(false)}
+        onSave={handleSaveDbConnection}
+        connectionToEdit={dbConnectionToEdit}
       />
       <ModelSelectionModal
         isOpen={isModelModalOpen}

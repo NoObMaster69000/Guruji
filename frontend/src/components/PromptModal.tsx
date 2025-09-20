@@ -128,10 +128,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({ isOpen, onClose, onSav
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600"
-            >
+            <button type="submit" className="px-4 py-2 rounded-lg bg-[--theme-color] text-white hover:opacity-90">
               Save Prompt
             </button>
           </div>

@@ -114,7 +114,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({ isOpen, onClose, onSave, t
           </div>
           <div className="flex justify-end space-x-4">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancel</button>
-            <button type="submit" className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">Save Tool</button>
+            <button type="submit" className="px-4 py-2 rounded-lg bg-[--theme-color] text-white hover:opacity-90">Save Tool</button>
           </div>
         </form>
       </div>
