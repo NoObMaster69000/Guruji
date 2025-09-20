@@ -19,6 +19,7 @@ interface ChatViewProps {
   handleSendMessage: (e: FormEvent) => void;
   inputRef: React.RefObject<HTMLInputElement>;
   chatEndRef: React.RefObject<HTMLDivElement>;
+  selectedKbs: string[];
   darkMode: boolean;
   toggleDarkMode: () => void;
   handleClearChat: () => void;
@@ -52,6 +53,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   openSettingsModal,
   isSidebarOpen,
 }) => {
+  // The selectedKbs prop is now available but not used in this component directly.
   return (
     <div className="flex flex-col h-screen flex-1">
       <Header
