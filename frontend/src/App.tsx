@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView, Message } from './components/ChatView';
 import { PromptModal, PromptTemplate } from './components/PromptModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ToolModal, Tool } from './components/ToolModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,8 +29,11 @@ const App: React.FC = () => {
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([
     { id: '1', title: 'Summarize Text', text: 'Please summarize the following text:\n\n' }
   ]);
+  const [tools, setTools] = useState<Tool[]>([]);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [isToolModalOpen, setIsToolModalOpen] = useState(false);
   const [promptToEdit, setPromptToEdit] = useState<PromptTemplate | null>(null);
+  const [toolToEdit, setToolToEdit] = useState<Tool | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -224,6 +228,29 @@ const App: React.FC = () => {
     setPromptToEdit(prompt);
     setIsPromptModalOpen(true);
   };
+  
+  // --- Tool Handlers ---
+  const handleSaveTool = (toolData: Omit<Tool, 'id'> & { id?: string }) => {
+    if (toolData.id) { // Editing existing tool
+      setTools(prev => prev.map(t => t.id === toolData.id ? { ...t, title: toolData.title, content: toolData.content } : t));
+    } else { // Creating new tool
+      setTools(prev => [...prev, { ...toolData, id: uuidv4(), content: toolData.content }]);
+    }
+  };
+
+  const handleDeleteTool = (id: string) => {
+    setTools(prev => prev.filter(t => t.id !== id));
+  };
+
+  const openNewToolModal = () => {
+    setToolToEdit(null);
+    setIsToolModalOpen(true);
+  };
+
+  const openEditToolModal = (tool: Tool) => {
+    setToolToEdit(tool);
+    setIsToolModalOpen(true);
+  };
 
   const handleSaveKnowledgeBase = async (data: any) => {
     // Note: We are not actually sending the files in this step,
@@ -288,6 +315,11 @@ const App: React.FC = () => {
       onEditPrompt={openEditPromptModal}
       onDeletePrompt={handleDeletePrompt}
       onUsePrompt={handleUsePrompt}
+      tools={tools}
+      onNewTool={openNewToolModal}
+      onEditTool={openEditToolModal}
+      onDeleteTool={handleDeleteTool}
+      onUseTool={() => { /* Define what using a tool does */ }}
       onNewKnowledgeBase={() => setIsKbModalOpen(true)}
       selectedKbs={selectedKbs}
       setSelectedKbs={setSelectedKbs}
@@ -318,6 +350,12 @@ const App: React.FC = () => {
         onClose={() => setIsPromptModalOpen(false)}
         onSave={handleSavePrompt}
         promptToEdit={promptToEdit}
+      />
+      <ToolModal
+        isOpen={isToolModalOpen}
+        onClose={() => setIsToolModalOpen(false)}
+        onSave={handleSaveTool}
+        toolToEdit={toolToEdit}
       />
       <KnowledgeBaseModal
         isOpen={isKbModalOpen}
