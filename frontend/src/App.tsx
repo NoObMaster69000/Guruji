@@ -3,7 +3,11 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView, Message } from './components/ChatView';
 import { PromptModal, PromptTemplate } from './components/PromptModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ToolModal, Tool } from './components/ToolModal';
 import { KnowledgeBaseModal } from './components/KnowledgeBaseModal';
+import { ModelSelectionModal, ModelProvider, ApiKeys } from './components/ModelSelectionModal';
+import { DatabaseModal, DatabaseConnection } from './components/DatabaseModal';
+import { ChatSessionModal } from './components/ChatSessionModal';
 import LoginPage from './components/LoginPage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -11,7 +15,16 @@ import { v4 as uuidv4 } from 'uuid';
 export interface ChatSession {
   id: string;
   title: string;
+  description?: string;
   messages: Message[];
+}
+
+export interface ModelSettings {
+  model: string;
+  temperature: number;
+  timeout: number;
+  max_tokens: number;
+  max_retries: number;
 }
 
 // =================================================================================
@@ -28,15 +41,35 @@ const App: React.FC = () => {
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([
     { id: '1', title: 'Summarize Text', text: 'Please summarize the following text:\n\n' }
   ]);
+  const [tools, setTools] = useState<Tool[]>([]);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [isToolModalOpen, setIsToolModalOpen] = useState(false);
   const [promptToEdit, setPromptToEdit] = useState<PromptTemplate | null>(null);
+  const [toolToEdit, setToolToEdit] = useState<Tool | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+  const [dbConnections, setDbConnections] = useState<DatabaseConnection[]>([]);
+  const [dbConnectionToEdit, setDbConnectionToEdit] = useState<DatabaseConnection | null>(null);
   const [isKbModalOpen, setIsKbModalOpen] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [chatToEdit, setChatToEdit] = useState<ChatSession | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
+  const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
+  const [currentModel, setCurrentModel] = useState<ModelProvider>('Gemini');
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({});
+  const [modelSettings, setModelSettings] = useState<ModelSettings>({
+    model: 'gemini-pro',
+    temperature: 0.7,
+    timeout: 120,
+    max_tokens: 1024,
+    max_retries: 2,
+  });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -78,37 +111,7 @@ const App: React.FC = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeChat?.messages, isTyping]);
 
-  // Bot reply simulation
-  useEffect(() => {
-    const messages = activeChat?.messages ?? [];
-    if (messages.length > 0 && messages[messages.length - 1].sender === 'user') {
-      setIsTyping(true);
-      const timer = setTimeout(() => {
-        const lastUserMessage = messages[messages.length - 1].text;
-        const botMessage: Message = {
-          id: Date.now(),
-          text: `Echo: ${lastUserMessage}`,
-          sender: 'bot',
-          timestamp: new Date().toLocaleTimeString(),
-        };
-
-        setChatSessions(prevSessions =>
-          prevSessions.map(session =>
-            session.id === activeChatId
-              ? { ...session, messages: [...session.messages, botMessage] }
-              : session
-          )
-        );
-        setIsTyping(false);
-      }, 1500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [activeChat?.messages, activeChatId]);
-
-  // --- Event Handlers ---
-
-  const handleSendMessage = (e: FormEvent) => {
+  const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
     if (input.trim() === '' || !activeChatId) return;
 
@@ -126,11 +129,66 @@ const App: React.FC = () => {
           : session
       )
     );
+
+    const messageToSend = input;
     setInput('');
+    setIsTyping(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: activeChatId,
+          message: messageToSend,
+          provider: currentModel,
+          ...modelSettings,
+          selected_kbs: selectedKbs,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        text: data.reply,
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString(),
+      };
+
+      setChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === activeChatId
+            ? { ...session, messages: [...session.messages, botMessage] }
+            : session
+        )
+      );
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      const errorMessage: Message = {
+        id: Date.now() + 1,
+        text: "Sorry, I couldn't get a response. Please try again.",
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === activeChatId
+            ? { ...session, messages: [...session.messages, errorMessage] }
+            : session
+        )
+      );
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       handleSendMessage(e as unknown as FormEvent);
     }
   };
@@ -156,6 +214,49 @@ const App: React.FC = () => {
     if (activeChatId === id) {
       setActiveChatId(chatSessions[0]?.id || null);
     }
+  };
+
+  const handleEditChat = (session: ChatSession) => {
+    setChatToEdit(session);
+    setIsChatModalOpen(true);
+  };
+
+  const handleSaveChat = (sessionData: { id: string; title: string; description?: string }) => {
+    setChatSessions(prev =>
+      prev.map(session =>
+        session.id === sessionData.id ? { ...session, title: sessionData.title, description: sessionData.description } : session
+      )
+    );
+  };
+
+  const handleSaveModelSelection = (provider: ModelProvider, keys: ApiKeys, settings: ModelSettings) => {
+    setCurrentModel(provider);
+    setApiKeys(keys);
+    setModelSettings(settings);
+    // Here you might want to save keys to localStorage for persistence
+  };
+
+  // --- Database Connection Handlers ---
+  const handleSaveDbConnection = (connectionData: Omit<DatabaseConnection, 'id'> & { id?: string }) => {
+    if (connectionData.id) { // Editing
+      setDbConnections(prev => prev.map(c => c.id === connectionData.id ? { ...c, ...connectionData } : c));
+    } else { // Creating
+      setDbConnections(prev => [...prev, { ...connectionData, id: uuidv4() } as DatabaseConnection]);
+    }
+  };
+
+  const handleDeleteDbConnection = (id: string) => {
+    setDbConnections(prev => prev.filter(c => c.id !== id));
+  };
+
+  const openNewDbModal = () => {
+    setDbConnectionToEdit(null);
+    setIsDbModalOpen(true);
+  };
+
+  const openEditDbModal = (connection: DatabaseConnection) => {
+    setDbConnectionToEdit(connection);
+    setIsDbModalOpen(true);
   };
 
   const handleClearChat = () => {
@@ -200,6 +301,29 @@ const App: React.FC = () => {
     setPromptToEdit(prompt);
     setIsPromptModalOpen(true);
   };
+  
+  // --- Tool Handlers ---
+  const handleSaveTool = (toolData: Omit<Tool, 'id'> & { id?: string }) => {
+    if (toolData.id) { // Editing existing tool
+      setTools(prev => prev.map(t => t.id === toolData.id ? { ...t, title: toolData.title, content: toolData.content } : t));
+    } else { // Creating new tool
+      setTools(prev => [...prev, { ...toolData, id: uuidv4(), content: toolData.content }]);
+    }
+  };
+
+  const handleDeleteTool = (id: string) => {
+    setTools(prev => prev.filter(t => t.id !== id));
+  };
+
+  const openNewToolModal = () => {
+    setToolToEdit(null);
+    setIsToolModalOpen(true);
+  };
+
+  const openEditToolModal = (tool: Tool) => {
+    setToolToEdit(tool);
+    setIsToolModalOpen(true);
+  };
 
   const handleSaveKnowledgeBase = async (data: any) => {
     // Note: We are not actually sending the files in this step,
@@ -210,6 +334,10 @@ const App: React.FC = () => {
       vector_store: data.vectorStore,
       allowed_file_types: data.allowedFileTypes,
       parsing_library: data.parsingLibrary,
+      chunking_strategy: data.chunkingStrategy,
+      chunk_size: data.chunkSize,
+      chunk_overlap: data.chunkOverlap,
+      metadata_strategy: data.metadataStrategy,
     };
 
     try {
@@ -255,17 +383,34 @@ const App: React.FC = () => {
       onNewChat={handleNewChat}
       onSelectChat={handleSelectChat}
       onDeleteChat={handleDeleteChat}
+      onEditChat={handleEditChat}
       promptTemplates={promptTemplates}
       onNewPrompt={openNewPromptModal}
       onEditPrompt={openEditPromptModal}
       onDeletePrompt={handleDeletePrompt}
       onUsePrompt={handleUsePrompt}
+      tools={tools}
+      onNewTool={openNewToolModal}
+      onEditTool={openEditToolModal}
+      onDeleteTool={handleDeleteTool}
+      onUseTool={() => { /* Define what using a tool does */ }}
       onNewKnowledgeBase={() => setIsKbModalOpen(true)}
+      selectedKbs={selectedKbs}
+      dbConnections={dbConnections}
+      onNewDbConnection={openNewDbModal}
+      onEditDbConnection={openEditDbModal}
+      onDeleteDbConnection={handleDeleteDbConnection}
+      selectedDbs={selectedDbs}
+      setSelectedDbs={setSelectedDbs}
+      onConnectDb={() => { /* Define what connecting to a DB does */ }}
+      onOpenModelModal={() => setIsModelModalOpen(true)}
+      setSelectedKbs={setSelectedKbs}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : ''}`}>
         <ChatView
           messages={activeChat?.messages ?? []}
           isTyping={isTyping}
+          selectedKbs={selectedKbs}
         input={input}
         setInput={setInput}
         handleSendMessage={handleSendMessage}
@@ -287,6 +432,32 @@ const App: React.FC = () => {
         onClose={() => setIsPromptModalOpen(false)}
         onSave={handleSavePrompt}
         promptToEdit={promptToEdit}
+      />
+      <ToolModal
+        isOpen={isToolModalOpen}
+        onClose={() => setIsToolModalOpen(false)}
+        onSave={handleSaveTool}
+        toolToEdit={toolToEdit}
+      />
+      <ChatSessionModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        onSave={handleSaveChat}
+        sessionToEdit={chatToEdit}
+      />
+      <DatabaseModal
+        isOpen={isDbModalOpen}
+        onClose={() => setIsDbModalOpen(false)}
+        onSave={handleSaveDbConnection}
+        connectionToEdit={dbConnectionToEdit}
+      />
+      <ModelSelectionModal
+        isOpen={isModelModalOpen}
+        onClose={() => setIsModelModalOpen(false)}
+        onSave={handleSaveModelSelection}
+        currentModel={currentModel}
+        apiKeys={apiKeys}
+        modelSettings={modelSettings}
       />
       <KnowledgeBaseModal
         isOpen={isKbModalOpen}

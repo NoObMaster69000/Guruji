@@ -35,7 +35,13 @@ class ChatRequest(BaseModel):
     """Request model for the /chat endpoint."""
     session_id: str
     message: str
-    agent: Optional[str] = None
+    provider: str # e.g., 'Gemini', 'OpenAI'
+    model: str # e.g., 'gemini-pro', 'gpt-4'
+    temperature: float
+    timeout: int
+    max_tokens: int
+    max_retries: int
+    selected_kbs: List[str] = []
 
 class ChatResponse(BaseModel):
     """Response model for the /chat endpoint."""
@@ -79,3 +85,7 @@ class KnowledgeBaseRequest(BaseModel):
     vector_store: str
     allowed_file_types: List[str]
     parsing_library: str
+    chunking_strategy: str
+    chunk_size: int
+    chunk_overlap: int
+    metadata_strategy: str
