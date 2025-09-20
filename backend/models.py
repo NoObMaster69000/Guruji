@@ -77,7 +77,55 @@ class ToolsListResponse(BaseModel):
     """Response model for listing available tools."""
     tools: List[ToolDetail]
 
+# --- Custom Tool Models ---
+
+class CustomTool(BaseModel):
+    """Model for a custom tool."""
+    id: str
+    name: str
+    description: str
+    code: str
+
+class CustomToolCreate(BaseModel):
+    """Request model for creating a new custom tool."""
+    name: str
+    description: str
+    code: str
+
+# --- Database Models ---
+
+class DatabaseConnection(BaseModel):
+    """Model for a database connection."""
+    id: str
+    name: str
+    db_type: str
+    host: str
+    port: int
+    username: str
+    password: str # In a real app, this should be handled more securely
+
+class DatabaseConnectionCreate(BaseModel):
+    """Request model for creating a new database connection."""
+    name: str
+    db_type: str
+    host: str
+    port: int
+    username: str
+    password: str
+
 # --- Knowledge Base Models ---
+
+class KnowledgeBase(BaseModel):
+    """Model for a single Knowledge Base."""
+    id: str
+    kb_name: str
+    vector_store: str
+    allowed_file_types: List[str]
+    parsing_library: str
+    chunking_strategy: str
+    chunk_size: int
+    chunk_overlap: int
+    metadata_strategy: str
 
 class KnowledgeBaseRequest(BaseModel):
     """Request model for creating a new Knowledge Base."""

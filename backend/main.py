@@ -18,7 +18,8 @@ from mcp.server.fastmcp import FastMCP
 from models import (
     Message, ToolCall, NewSessionResponse, ChatRequest, ChatResponse,
     HistoryResponse, AgentsListResponse, ToolsListResponse, ToolDetail,
-    KnowledgeBaseRequest
+    KnowledgeBaseRequest, KnowledgeBase, CustomTool, CustomToolCreate,
+    DatabaseConnection, DatabaseConnectionCreate
 )
 from tools import add_tools
 from agents import select_agent, get_agents_list, AgentDetail
@@ -28,12 +29,21 @@ from agents import select_agent, get_agents_list, AgentDetail
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- In-Memory Storage ---
+SESSIONS: Dict[str, List[Message]] = {}
+SESSION_METADATA: Dict[str, datetime] = {}
+SESSION_EXPIRATION = timedelta(hours=1)
+
+KNOWLEDGE_BASES: Dict[str, Dict] = {}
+CUSTOM_TOOLS: Dict[str, Dict] = {}
+DATABASES: Dict[str, Dict] = {}
+
 # 1. Create the MCP Server instance and add tools
 mcp_server = FastMCP(
     name="AdvancedChatServer",
     instructions="A server with tools for calculation, web search, and getting the current time.",
 )
-add_tools(mcp_server)
+add_tools(mcp_server, CUSTOM_TOOLS)
 
 # 2. Create the FastAPI application
 app = FastAPI(
@@ -55,14 +65,6 @@ app.add_middleware(
 # 4. Mount the MCP server's ASGI app
 # A compliant MCP client would connect to this endpoint (e.g., http://localhost:8000/mcp)
 app.mount("/mcp", mcp_server.streamable_http_app())
-
-# --- In-Memory Session Storage ---
-
-SESSIONS: Dict[str, List[Message]] = {}
-SESSION_METADATA: Dict[str, datetime] = {}
-SESSION_EXPIRATION = timedelta(hours=1)
-
-KNOWLEDGE_BASES: Dict[str, Dict] = {}
 
 def get_session_history(session_id: str) -> List[Message]:
     """Retrieves a session history or raises HTTPException if not found or expired."""
@@ -196,16 +198,55 @@ async def list_agents():
 @app.get("/tools", response_model=ToolsListResponse, tags=["Discovery"])
 async def list_tools():
     """Lists all available tools and their schemas."""
-    tools_list = []
-    for tool in mcp_server.tools.values():
-        tools_list.append(
-            ToolDetail(
-                tool_name=tool.name,
-                description=tool.description or "",
-                schema=tool.input_schema,
-            )
+    tools = await mcp_server.list_tools()
+    tools_list = [
+        ToolDetail(
+            tool_name=tool.name,
+            description=tool.description or "",
+            schema=tool.inputSchema,
         )
+        for tool in tools
+    ]
     return ToolsListResponse(tools=tools_list)
+
+@app.post("/tools/create", tags=["Tools Hub"])
+async def create_custom_tool(request: CustomToolCreate):
+    """Creates a new custom tool."""
+    tool_id = str(uuid.uuid4())
+    CUSTOM_TOOLS[tool_id] = request.dict()
+    # Re-register tools
+    add_tools(mcp_server, CUSTOM_TOOLS)
+    logger.info(f"New custom tool created: {request.name} (ID: {tool_id})")
+    return {"message": "Custom tool created successfully", "tool_id": tool_id, "data": request.dict()}
+
+@app.get("/tools/{tool_id}", response_model=CustomTool, tags=["Tools Hub"])
+async def get_custom_tool(tool_id: str):
+    """Retrieves a single custom tool by its ID."""
+    if tool_id not in CUSTOM_TOOLS:
+        raise HTTPException(status_code=404, detail="Custom tool not found.")
+    return CustomTool(id=tool_id, **CUSTOM_TOOLS[tool_id])
+
+@app.put("/tools/{tool_id}", tags=["Tools Hub"])
+async def update_custom_tool(tool_id: str, request: CustomToolCreate):
+    """Updates an existing custom tool."""
+    if tool_id not in CUSTOM_TOOLS:
+        raise HTTPException(status_code=404, detail="Custom tool not found.")
+    CUSTOM_TOOLS[tool_id] = request.dict()
+    # Re-register tools
+    add_tools(mcp_server, CUSTOM_TOOLS)
+    logger.info(f"Custom tool {tool_id} updated: {request.name}")
+    return {"message": "Custom tool updated successfully", "tool_id": tool_id, "data": request.dict()}
+
+@app.delete("/tools/{tool_id}", tags=["Tools Hub"])
+async def delete_custom_tool(tool_id: str):
+    """Deletes a custom tool."""
+    if tool_id not in CUSTOM_TOOLS:
+        raise HTTPException(status_code=404, detail="Custom tool not found.")
+    del CUSTOM_TOOLS[tool_id]
+    # Re-register tools
+    add_tools(mcp_server, CUSTOM_TOOLS)
+    logger.info(f"Custom tool {tool_id} deleted.")
+    return {"message": "Custom tool deleted successfully", "tool_id": tool_id}
 
 @app.post("/kb/create", tags=["Knowledge Base"])
 async def create_knowledge_base(request: KnowledgeBaseRequest):
@@ -219,3 +260,68 @@ async def create_knowledge_base(request: KnowledgeBaseRequest):
 async def list_knowledge_bases():
     """Lists all available Knowledge Bases."""
     return [{"id": kb_id, **kb_data} for kb_id, kb_data in KNOWLEDGE_BASES.items()]
+
+@app.get("/kb/{kb_id}", response_model=KnowledgeBase, tags=["Knowledge Base"])
+async def get_knowledge_base(kb_id: str):
+    """Retrieves a single Knowledge Base by its ID."""
+    if kb_id not in KNOWLEDGE_BASES:
+        raise HTTPException(status_code=404, detail="Knowledge Base not found.")
+    return KnowledgeBase(id=kb_id, **KNOWLEDGE_BASES[kb_id])
+
+@app.put("/kb/{kb_id}", tags=["Knowledge Base"])
+async def update_knowledge_base(kb_id: str, request: KnowledgeBaseRequest):
+    """Updates an existing Knowledge Base."""
+    if kb_id not in KNOWLEDGE_BASES:
+        raise HTTPException(status_code=404, detail="Knowledge Base not found.")
+    KNOWLEDGE_BASES[kb_id] = request.dict()
+    logger.info(f"Knowledge Base {kb_id} updated: {request.kb_name}")
+    return {"message": "Knowledge Base updated successfully", "kb_id": kb_id, "data": request.dict()}
+
+@app.delete("/kb/{kb_id}", tags=["Knowledge Base"])
+async def delete_knowledge_base(kb_id: str):
+    """Deletes a Knowledge Base."""
+    if kb_id not in KNOWLEDGE_BASES:
+        raise HTTPException(status_code=404, detail="Knowledge Base not found.")
+    del KNOWLEDGE_BASES[kb_id]
+    logger.info(f"Knowledge Base {kb_id} deleted.")
+    return {"message": "Knowledge Base deleted successfully", "kb_id": kb_id}
+
+# --- Database Hub Endpoints ---
+
+@app.post("/databases/create", tags=["Database Hub"])
+async def create_database_connection(request: DatabaseConnectionCreate):
+    """Creates a new database connection configuration."""
+    db_id = str(uuid.uuid4())
+    DATABASES[db_id] = request.dict()
+    logger.info(f"New database connection created: {request.name} (ID: {db_id})")
+    return {"message": "Database connection created successfully", "db_id": db_id, "data": request.dict()}
+
+@app.get("/databases/list", tags=["Database Hub"])
+async def list_database_connections():
+    """Lists all available database connections."""
+    return [{"id": db_id, **db_data} for db_id, db_data in DATABASES.items()]
+
+@app.get("/databases/{db_id}", response_model=DatabaseConnection, tags=["Database Hub"])
+async def get_database_connection(db_id: str):
+    """Retrieves a single database connection by its ID."""
+    if db_id not in DATABASES:
+        raise HTTPException(status_code=404, detail="Database connection not found.")
+    return DatabaseConnection(id=db_id, **DATABASES[db_id])
+
+@app.put("/databases/{db_id}", tags=["Database Hub"])
+async def update_database_connection(db_id: str, request: DatabaseConnectionCreate):
+    """Updates an existing database connection."""
+    if db_id not in DATABASES:
+        raise HTTPException(status_code=404, detail="Database connection not found.")
+    DATABASES[db_id] = request.dict()
+    logger.info(f"Database connection {db_id} updated: {request.name}")
+    return {"message": "Database connection updated successfully", "db_id": db_id, "data": request.dict()}
+
+@app.delete("/databases/{db_id}", tags=["Database Hub"])
+async def delete_database_connection(db_id: str):
+    """Deletes a database connection."""
+    if db_id not in DATABASES:
+        raise HTTPException(status_code=404, detail="Database connection not found.")
+    del DATABASES[db_id]
+    logger.info(f"Database connection {db_id} deleted.")
+    return {"message": "Database connection deleted successfully", "db_id": db_id}
