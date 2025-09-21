@@ -16,11 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy.orm import Session
 
-from backend import sql_models as sql_models
-from backend import models as models
-from backend.database import SessionLocal, engine, Base
-from backend.tools import add_tools
-from backend.agents import select_agent, get_agents_list, AgentDetail
+import sql_models as sql_models
+import models as models
+from database import SessionLocal, engine, Base
+from tools import add_tools
+from agents import select_agent, get_agents_list, AgentDetail
 
 # Create all tables
 Base.metadata.create_all(bind=engine)

@@ -94,6 +94,7 @@ class KnowledgeBaseCreate(KnowledgeBaseBase):
 
 class KnowledgeBase(KnowledgeBaseBase):
     id: int
+    path: str
 
     class Config:
         from_attributes = True
