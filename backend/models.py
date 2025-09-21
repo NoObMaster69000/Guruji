@@ -77,48 +77,61 @@ class ToolsListResponse(BaseModel):
     """Response model for listing available tools."""
     tools: List[ToolDetail]
 
+# --- Knowledge Base Models ---
+
+class KnowledgeBaseBase(BaseModel):
+    kb_name: str
+    vector_store: str
+    allowed_file_types: List[str]
+    parsing_library: str
+    chunking_strategy: str
+    chunk_size: int
+    chunk_overlap: int
+    metadata_strategy: str
+
+class KnowledgeBaseCreate(KnowledgeBaseBase):
+    pass
+
+class KnowledgeBase(KnowledgeBaseBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
 # --- Custom Tool Models ---
 
-class CustomTool(BaseModel):
-    """Model for a custom tool."""
-    id: str
+class CustomToolBase(BaseModel):
     name: str
     description: str
     code: str
 
-class CustomToolCreate(BaseModel):
-    """Request model for creating a new custom tool."""
-    name: str
-    description: str
-    code: str
+class CustomToolCreate(CustomToolBase):
+    pass
+
+class CustomTool(CustomToolBase):
+    id: int
+
+    class Config:
+        from_attributes = True
 
 # --- Prompt Models ---
 
-class Prompt(BaseModel):
-    """Model for a prompt."""
-    id: str
+class PromptBase(BaseModel):
     name: str
     text: str
 
-class PromptCreate(BaseModel):
-    """Request model for creating a new prompt."""
-    name: str
-    text: str
+class PromptCreate(PromptBase):
+    pass
+
+class Prompt(PromptBase):
+    id: int
+
+    class Config:
+        from_attributes = True
 
 # --- Database Models ---
 
-class DatabaseConnection(BaseModel):
-    """Model for a database connection."""
-    id: str
-    name: str
-    db_type: str
-    host: str
-    port: int
-    username: str
-    password: str # In a real app, this should be handled more securely
-
-class DatabaseConnectionCreate(BaseModel):
-    """Request model for creating a new database connection."""
+class DatabaseConnectionBase(BaseModel):
     name: str
     db_type: str
     host: str
@@ -126,27 +139,11 @@ class DatabaseConnectionCreate(BaseModel):
     username: str
     password: str
 
-# --- Knowledge Base Models ---
+class DatabaseConnectionCreate(DatabaseConnectionBase):
+    pass
 
-class KnowledgeBase(BaseModel):
-    """Model for a single Knowledge Base."""
-    id: str
-    kb_name: str
-    vector_store: str
-    allowed_file_types: List[str]
-    parsing_library: str
-    chunking_strategy: str
-    chunk_size: int
-    chunk_overlap: int
-    metadata_strategy: str
+class DatabaseConnection(DatabaseConnectionBase):
+    id: int
 
-class KnowledgeBaseRequest(BaseModel):
-    """Request model for creating a new Knowledge Base."""
-    kb_name: str
-    vector_store: str
-    allowed_file_types: List[str]
-    parsing_library: str
-    chunking_strategy: str
-    chunk_size: int
-    chunk_overlap: int
-    metadata_strategy: str
+    class Config:
+        from_attributes = True

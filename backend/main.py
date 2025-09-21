@@ -11,18 +11,19 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy.orm import Session
 
-from models import (
-    Message, ToolCall, NewSessionResponse, ChatRequest, ChatResponse,
-    HistoryResponse, AgentsListResponse, ToolsListResponse, ToolDetail,
-    KnowledgeBaseRequest, KnowledgeBase, CustomTool, CustomToolCreate,
-    DatabaseConnection, DatabaseConnectionCreate, Prompt, PromptCreate
-)
-from tools import add_tools
-from agents import select_agent, get_agents_list, AgentDetail
+from backend import sql_models as sql_models
+from backend import models as models
+from backend.database import SessionLocal, engine, Base
+from backend.tools import add_tools
+from backend.agents import select_agent, get_agents_list, AgentDetail
+
+# Create all tables
+Base.metadata.create_all(bind=engine)
 
 # --- Application Setup ---
 
@@ -30,21 +31,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- In-Memory Storage ---
-SESSIONS: Dict[str, List[Message]] = {}
+SESSIONS: Dict[str, List] = {}
 SESSION_METADATA: Dict[str, datetime] = {}
 SESSION_EXPIRATION = timedelta(hours=1)
 
-KNOWLEDGE_BASES: Dict[str, Dict] = {}
-CUSTOM_TOOLS: Dict[str, Dict] = {}
-DATABASES: Dict[str, Dict] = {}
-PROMPTS: Dict[str, Dict] = {}
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # 1. Create the MCP Server instance and add tools
 mcp_server = FastMCP(
     name="AdvancedChatServer",
     instructions="A server with tools for calculation, web search, and getting the current time.",
 )
-add_tools(mcp_server, CUSTOM_TOOLS)
 
 # 2. Create the FastAPI application
 app = FastAPI(
@@ -52,6 +55,14 @@ app = FastAPI(
     description="An MCP server mounted within a FastAPI app, with custom session and agent logic.",
     version="3.0.0",
 )
+
+@app.on_event("startup")
+def startup_event():
+    db = SessionLocal()
+    custom_tools = db.query(sql_models.CustomTool).all()
+    custom_tools_dict = {tool.id: {"name": tool.name, "description": tool.description, "code": tool.code} for tool in custom_tools}
+    add_tools(mcp_server, custom_tools_dict)
+    db.close()
 
 # 3. Add CORS middleware
 app.add_middleware(
@@ -67,7 +78,7 @@ app.add_middleware(
 # A compliant MCP client would connect to this endpoint (e.g., http://localhost:8000/mcp)
 app.mount("/mcp", mcp_server.streamable_http_app())
 
-def get_session_history(session_id: str) -> List[Message]:
+def get_session_history(session_id: str) -> List[models.Message]:
     """Retrieves a session history or raises HTTPException if not found or expired."""
     if session_id not in SESSIONS or session_id not in SESSION_METADATA:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
@@ -83,7 +94,7 @@ def get_session_history(session_id: str) -> List[Message]:
 
 # --- Mock Agent and Tool-Calling Logic ---
 
-def run_agent_logic(agent: AgentDetail, message: str, selected_kbs: List[str]) -> Tuple[str, List[ToolCall]]:
+def run_agent_logic(agent: models.AgentDetail, message: str, selected_kbs: List[str], db: Session) -> Tuple[str, List[models.ToolCall]]:
     """
     Simulates the agent's logic to generate a reply and decide on tool calls.
     """
@@ -91,9 +102,9 @@ def run_agent_logic(agent: AgentDetail, message: str, selected_kbs: List[str]) -
         logger.info(f"Selected Knowledge Bases: {selected_kbs}")
         response_parts = []
         for kb_id in selected_kbs:
-            if kb_id in KNOWLEDGE_BASES:
-                kb = KNOWLEDGE_BASES[kb_id]
-                response_parts.append(f"In knowledge base '{kb['kb_name']}', I found the following information about '{message}': ...")
+            kb = db.query(sql_models.KnowledgeBase).filter(sql_models.KnowledgeBase.id == kb_id).first()
+            if kb:
+                response_parts.append(f"In knowledge base '{kb.kb_name}', I found the following information about '{message}': ...")
         if response_parts:
             return "\n".join(response_parts), []
         else:
@@ -118,24 +129,25 @@ def run_agent_logic(agent: AgentDetail, message: str, selected_kbs: List[str]) -
             if op:
                 tool_name = "calculator"
                 args = {"a": float(a), "b": float(b), "op": op}
-                result = mcp_server.tools[tool_name].wrapped(**args)
-                tool_calls.append(ToolCall(tool=tool_name, args=args, result=result))
+                # This is a default tool, so we can call it directly
+                result = mcp_server._tool_manager.call_tool_by_name(tool_name, args)
+                tool_calls.append(models.ToolCall(tool=tool_name, args=args, result=str(result)))
                 return f"I've calculated that for you. {result}", tool_calls
         return "I can help with math. Please provide a simple expression like '123 + 456'.", []
 
     elif agent.name == "WebResearcher":
         tool_name = "web_search"
         args = {"query": message}
-        result = mcp_server.tools[tool_name].wrapped(**args)
-        tool_calls.append(ToolCall(tool=tool_name, args=args, result=result))
+        result = mcp_server._tool_manager.call_tool_by_name(tool_name, args)
+        tool_calls.append(models.ToolCall(tool=tool_name, args=args, result=str(result)))
         return f"Based on my web search: {result}", tool_calls
 
     elif agent.name == "Generalist":
         if "time" in message.lower():
             tool_name = "current_time"
             args = {}
-            result = mcp_server.tools[tool_name].wrapped(**args)
-            tool_calls.append(ToolCall(tool=tool_name, args=args, result=result))
+            result = mcp_server._tool_manager.call_tool_by_name(tool_name, args)
+            tool_calls.append(models.ToolCall(tool=tool_name, args=args, result=str(result)))
             return f"You asked about the time. {result}", tool_calls
 
         return f"As the Generalist, I can tell you: '{message}' is an interesting topic!", []
@@ -145,30 +157,30 @@ def run_agent_logic(agent: AgentDetail, message: str, selected_kbs: List[str]) -
 
 # --- Custom FastAPI Endpoints ---
 
-@app.post("/new-session", response_model=NewSessionResponse, tags=["Session Management"])
+@app.post("/new-session", response_model=models.NewSessionResponse, tags=["Session Management"])
 async def new_session():
     """Creates a new chat session."""
     session_id = str(uuid.uuid4())
     SESSIONS[session_id] = []
     SESSION_METADATA[session_id] = datetime.utcnow()
     logger.info(f"New session created: {session_id}")
-    return NewSessionResponse(session_id=session_id, created_at=SESSION_METADATA[session_id])
+    return models.NewSessionResponse(session_id=session_id, created_at=SESSION_METADATA[session_id])
 
-@app.post("/chat", response_model=ChatResponse, tags=["Chat"])
-async def chat(request: ChatRequest):
+@app.post("/chat", response_model=models.ChatResponse, tags=["Chat"])
+async def chat(request: models.ChatRequest, db: Session = Depends(get_db)):
     """Handles a user message and returns an agent's reply."""
     history = get_session_history(request.session_id)
 
     # 1. Add user message to history
-    user_message = Message(role="user", content=request.message)
+    user_message = models.Message(role="user", content=request.message)
     history.append(user_message)
 
     # 2. Select agent and run logic
     agent = select_agent(request.message, request.agent)
-    reply_content, tool_calls = run_agent_logic(agent, request.message, request.selected_kbs)
+    reply_content, tool_calls = run_agent_logic(agent, request.message, request.selected_kbs, db)
 
     # 3. Add assistant reply to history
-    assistant_message = Message(
+    assistant_message = models.Message(
         role="assistant",
         content=reply_content,
         agent_used=agent.name,
@@ -178,191 +190,197 @@ async def chat(request: ChatRequest):
 
     logger.info(f"Session {request.session_id}: Agent '{agent.name}' replied.")
 
-    return ChatResponse(
+    return models.ChatResponse(
         reply=reply_content,
         agent_used=agent.name,
         tool_calls=tool_calls,
         timestamp=assistant_message.timestamp
     )
 
-@app.get("/history/{session_id}", response_model=HistoryResponse, tags=["Session Management"])
+@app.get("/history/{session_id}", response_model=models.HistoryResponse, tags=["Session Management"])
 async def get_history(session_id: str):
     """Retrieves the full chat history for a session."""
     history = get_session_history(session_id)
-    return HistoryResponse(session_id=session_id, history=history)
+    return models.HistoryResponse(session_id=session_id, history=history)
 
-@app.get("/agents", response_model=AgentsListResponse, tags=["Discovery"])
+@app.get("/agents", response_model=models.AgentsListResponse, tags=["Discovery"])
 async def list_agents():
     """Lists all available agents."""
-    return AgentsListResponse(agents=get_agents_list())
+    return models.AgentsListResponse(agents=get_agents_list())
 
-@app.get("/tools", response_model=ToolsListResponse, tags=["Discovery"])
-async def list_tools():
+@app.get("/tools", response_model=models.ToolsListResponse, tags=["Discovery"])
+async def list_tools(db: Session = Depends(get_db)):
     """Lists all available tools and their schemas."""
+    # TODO: This needs to be reimplemented to load tools from DB
     tools = await mcp_server.list_tools()
     tools_list = [
-        ToolDetail(
+        models.ToolDetail(
             tool_name=tool.name,
             description=tool.description or "",
             schema=tool.inputSchema,
         )
         for tool in tools
     ]
-    return ToolsListResponse(tools=tools_list)
+    return models.ToolsListResponse(tools=tools_list)
 
-@app.post("/tools/create", tags=["Tools Hub"])
-async def create_custom_tool(request: CustomToolCreate):
-    """Creates a new custom tool."""
-    tool_id = str(uuid.uuid4())
-    CUSTOM_TOOLS[tool_id] = request.dict()
-    # Re-register tools
-    add_tools(mcp_server, CUSTOM_TOOLS)
-    logger.info(f"New custom tool created: {request.name} (ID: {tool_id})")
-    return {"message": "Custom tool created successfully", "tool_id": tool_id, "data": request.dict()}
+@app.post("/tools/create", response_model=models.CustomTool, tags=["Tools Hub"])
+def create_custom_tool(tool: models.CustomToolCreate, db: Session = Depends(get_db)):
+    db_tool = sql_models.CustomTool(**tool.dict())
+    db.add(db_tool)
+    db.commit()
+    db.refresh(db_tool)
+    return db_tool
 
-@app.get("/tools/{tool_id}", response_model=CustomTool, tags=["Tools Hub"])
-async def get_custom_tool(tool_id: str):
-    """Retrieves a single custom tool by its ID."""
-    if tool_id not in CUSTOM_TOOLS:
-        raise HTTPException(status_code=404, detail="Custom tool not found.")
-    return CustomTool(id=tool_id, **CUSTOM_TOOLS[tool_id])
+@app.get("/tools/{tool_id}", response_model=models.CustomTool, tags=["Tools Hub"])
+def get_custom_tool(tool_id: int, db: Session = Depends(get_db)):
+    db_tool = db.query(sql_models.CustomTool).filter(sql_models.CustomTool.id == tool_id).first()
+    if db_tool is None:
+        raise HTTPException(status_code=404, detail="Custom tool not found")
+    return db_tool
 
-@app.put("/tools/{tool_id}", tags=["Tools Hub"])
-async def update_custom_tool(tool_id: str, request: CustomToolCreate):
-    """Updates an existing custom tool."""
-    if tool_id not in CUSTOM_TOOLS:
-        raise HTTPException(status_code=404, detail="Custom tool not found.")
-    CUSTOM_TOOLS[tool_id] = request.dict()
-    # Re-register tools
-    add_tools(mcp_server, CUSTOM_TOOLS)
-    logger.info(f"Custom tool {tool_id} updated: {request.name}")
-    return {"message": "Custom tool updated successfully", "tool_id": tool_id, "data": request.dict()}
+@app.put("/tools/{tool_id}", response_model=models.CustomTool, tags=["Tools Hub"])
+def update_custom_tool(tool_id: int, tool: models.CustomToolCreate, db: Session = Depends(get_db)):
+    db_tool = db.query(sql_models.CustomTool).filter(sql_models.CustomTool.id == tool_id).first()
+    if db_tool is None:
+        raise HTTPException(status_code=404, detail="Custom tool not found")
+    for var, value in vars(tool).items():
+        setattr(db_tool, var, value) if value else None
+    db.add(db_tool)
+    db.commit()
+    db.refresh(db_tool)
+    return db_tool
 
 @app.delete("/tools/{tool_id}", tags=["Tools Hub"])
-async def delete_custom_tool(tool_id: str):
-    """Deletes a custom tool."""
-    if tool_id not in CUSTOM_TOOLS:
-        raise HTTPException(status_code=404, detail="Custom tool not found.")
-    del CUSTOM_TOOLS[tool_id]
-    # Re-register tools
-    add_tools(mcp_server, CUSTOM_TOOLS)
-    logger.info(f"Custom tool {tool_id} deleted.")
-    return {"message": "Custom tool deleted successfully", "tool_id": tool_id}
+def delete_custom_tool(tool_id: int, db: Session = Depends(get_db)):
+    db_tool = db.query(sql_models.CustomTool).filter(sql_models.CustomTool.id == tool_id).first()
+    if db_tool is None:
+        raise HTTPException(status_code=404, detail="Custom tool not found")
+    db.delete(db_tool)
+    db.commit()
+    return {"message": f"Custom tool {tool_id} deleted successfully"}
 
-@app.post("/kb/create", tags=["Knowledge Base"])
-async def create_knowledge_base(request: KnowledgeBaseRequest):
-    """Creates a new Knowledge Base configuration."""
-    kb_id = str(uuid.uuid4())
-    KNOWLEDGE_BASES[kb_id] = request.dict()
-    logger.info(f"New Knowledge Base created: {request.kb_name} (ID: {kb_id})")
-    return {"message": "Knowledge Base created successfully", "kb_id": kb_id, "data": request.dict()}
 
-@app.get("/kb/list", tags=["Knowledge Base"])
-async def list_knowledge_bases():
-    """Lists all available Knowledge Bases."""
-    return [{"id": kb_id, **kb_data} for kb_id, kb_data in KNOWLEDGE_BASES.items()]
+@app.post("/kb/create", response_model=models.KnowledgeBase, tags=["Knowledge Base"])
+def create_knowledge_base(kb: models.KnowledgeBaseCreate, db: Session = Depends(get_db)):
+    db_kb = sql_models.KnowledgeBase(**kb.dict())
+    db.add(db_kb)
+    db.commit()
+    db.refresh(db_kb)
+    return db_kb
 
-@app.get("/kb/{kb_id}", response_model=KnowledgeBase, tags=["Knowledge Base"])
-async def get_knowledge_base(kb_id: str):
-    """Retrieves a single Knowledge Base by its ID."""
-    if kb_id not in KNOWLEDGE_BASES:
-        raise HTTPException(status_code=404, detail="Knowledge Base not found.")
-    return KnowledgeBase(id=kb_id, **KNOWLEDGE_BASES[kb_id])
+@app.get("/kb/list", response_model=List[models.KnowledgeBase], tags=["Knowledge Base"])
+def list_knowledge_bases(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    kbs = db.query(sql_models.KnowledgeBase).offset(skip).limit(limit).all()
+    return kbs
 
-@app.put("/kb/{kb_id}", tags=["Knowledge Base"])
-async def update_knowledge_base(kb_id: str, request: KnowledgeBaseRequest):
-    """Updates an existing Knowledge Base."""
-    if kb_id not in KNOWLEDGE_BASES:
-        raise HTTPException(status_code=404, detail="Knowledge Base not found.")
-    KNOWLEDGE_BASES[kb_id] = request.dict()
-    logger.info(f"Knowledge Base {kb_id} updated: {request.kb_name}")
-    return {"message": "Knowledge Base updated successfully", "kb_id": kb_id, "data": request.dict()}
+@app.get("/kb/{kb_id}", response_model=models.KnowledgeBase, tags=["Knowledge Base"])
+def get_knowledge_base(kb_id: int, db: Session = Depends(get_db)):
+    db_kb = db.query(sql_models.KnowledgeBase).filter(sql_models.KnowledgeBase.id == kb_id).first()
+    if db_kb is None:
+        raise HTTPException(status_code=404, detail="Knowledge Base not found")
+    return db_kb
+
+@app.put("/kb/{kb_id}", response_model=models.KnowledgeBase, tags=["Knowledge Base"])
+def update_knowledge_base(kb_id: int, kb: models.KnowledgeBaseCreate, db: Session = Depends(get_db)):
+    db_kb = db.query(sql_models.KnowledgeBase).filter(sql_models.KnowledgeBase.id == kb_id).first()
+    if db_kb is None:
+        raise HTTPException(status_code=404, detail="Knowledge Base not found")
+    for var, value in vars(kb).items():
+        setattr(db_kb, var, value) if value else None
+    db.add(db_kb)
+    db.commit()
+    db.refresh(db_kb)
+    return db_kb
 
 @app.delete("/kb/{kb_id}", tags=["Knowledge Base"])
-async def delete_knowledge_base(kb_id: str):
-    """Deletes a Knowledge Base."""
-    if kb_id not in KNOWLEDGE_BASES:
-        raise HTTPException(status_code=404, detail="Knowledge Base not found.")
-    del KNOWLEDGE_BASES[kb_id]
-    logger.info(f"Knowledge Base {kb_id} deleted.")
-    return {"message": "Knowledge Base deleted successfully", "kb_id": kb_id}
+def delete_knowledge_base(kb_id: int, db: Session = Depends(get_db)):
+    db_kb = db.query(sql_models.KnowledgeBase).filter(sql_models.KnowledgeBase.id == kb_id).first()
+    if db_kb is None:
+        raise HTTPException(status_code=404, detail="Knowledge Base not found")
+    db.delete(db_kb)
+    db.commit()
+    return {"message": f"Knowledge Base {kb_id} deleted successfully"}
 
-# --- Database Hub Endpoints ---
 
-@app.post("/databases/create", tags=["Database Hub"])
-async def create_database_connection(request: DatabaseConnectionCreate):
-    """Creates a new database connection configuration."""
-    db_id = str(uuid.uuid4())
-    DATABASES[db_id] = request.dict()
-    logger.info(f"New database connection created: {request.name} (ID: {db_id})")
-    return {"message": "Database connection created successfully", "db_id": db_id, "data": request.dict()}
+@app.post("/databases/create", response_model=models.DatabaseConnection, tags=["Database Hub"])
+def create_database_connection(db_conn: models.DatabaseConnectionCreate, db: Session = Depends(get_db)):
+    db_db_conn = sql_models.DatabaseConnection(**db_conn.dict())
+    db.add(db_db_conn)
+    db.commit()
+    db.refresh(db_db_conn)
+    return db_db_conn
 
-@app.get("/databases/list", tags=["Database Hub"])
-async def list_database_connections():
-    """Lists all available database connections."""
-    return [{"id": db_id, **db_data} for db_id, db_data in DATABASES.items()]
+@app.get("/databases/list", response_model=List[models.DatabaseConnection], tags=["Database Hub"])
+def list_database_connections(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    db_conns = db.query(sql_models.DatabaseConnection).offset(skip).limit(limit).all()
+    return db_conns
 
-@app.get("/databases/{db_id}", response_model=DatabaseConnection, tags=["Database Hub"])
-async def get_database_connection(db_id: str):
-    """Retrieves a single database connection by its ID."""
-    if db_id not in DATABASES:
-        raise HTTPException(status_code=404, detail="Database connection not found.")
-    return DatabaseConnection(id=db_id, **DATABASES[db_id])
+@app.get("/databases/{db_id}", response_model=models.DatabaseConnection, tags=["Database Hub"])
+def get_database_connection(db_id: int, db: Session = Depends(get_db)):
+    db_db_conn = db.query(sql_models.DatabaseConnection).filter(sql_models.DatabaseConnection.id == db_id).first()
+    if db_db_conn is None:
+        raise HTTPException(status_code=404, detail="Database connection not found")
+    return db_db_conn
 
-@app.put("/databases/{db_id}", tags=["Database Hub"])
-async def update_database_connection(db_id: str, request: DatabaseConnectionCreate):
-    """Updates an existing database connection."""
-    if db_id not in DATABASES:
-        raise HTTPException(status_code=404, detail="Database connection not found.")
-    DATABASES[db_id] = request.dict()
-    logger.info(f"Database connection {db_id} updated: {request.name}")
-    return {"message": "Database connection updated successfully", "db_id": db_id, "data": request.dict()}
+@app.put("/databases/{db_id}", response_model=models.DatabaseConnection, tags=["Database Hub"])
+def update_database_connection(db_id: int, db_conn: models.DatabaseConnectionCreate, db: Session = Depends(get_db)):
+    db_db_conn = db.query(sql_models.DatabaseConnection).filter(sql_models.DatabaseConnection.id == db_id).first()
+    if db_db_conn is None:
+        raise HTTPException(status_code=404, detail="Database connection not found")
+    for var, value in vars(db_conn).items():
+        setattr(db_db_conn, var, value) if value else None
+    db.add(db_db_conn)
+    db.commit()
+    db.refresh(db_db_conn)
+    return db_db_conn
 
 @app.delete("/databases/{db_id}", tags=["Database Hub"])
-async def delete_database_connection(db_id: str):
-    """Deletes a database connection."""
-    if db_id not in DATABASES:
-        raise HTTPException(status_code=404, detail="Database connection not found.")
-    del DATABASES[db_id]
-    logger.info(f"Database connection {db_id} deleted.")
-    return {"message": "Database connection deleted successfully", "db_id": db_id}
+def delete_database_connection(db_id: int, db: Session = Depends(get_db)):
+    db_db_conn = db.query(sql_models.DatabaseConnection).filter(sql_models.DatabaseConnection.id == db_id).first()
+    if db_db_conn is None:
+        raise HTTPException(status_code=404, detail="Database connection not found")
+    db.delete(db_db_conn)
+    db.commit()
+    return {"message": f"Database connection {db_id} deleted successfully"}
 
-# --- Prompt Hub Endpoints ---
 
-@app.post("/prompts/create", tags=["Prompt Hub"])
-async def create_prompt(request: PromptCreate):
-    """Creates a new prompt."""
-    prompt_id = str(uuid.uuid4())
-    PROMPTS[prompt_id] = request.dict()
-    logger.info(f"New prompt created: {request.name} (ID: {prompt_id})")
-    return {"message": "Prompt created successfully", "prompt_id": prompt_id, "data": request.dict()}
+@app.post("/prompts/create", response_model=models.Prompt, tags=["Prompt Hub"])
+def create_prompt(prompt: models.PromptCreate, db: Session = Depends(get_db)):
+    db_prompt = sql_models.Prompt(**prompt.dict())
+    db.add(db_prompt)
+    db.commit()
+    db.refresh(db_prompt)
+    return db_prompt
 
-@app.get("/prompts/list", tags=["Prompt Hub"])
-async def list_prompts():
-    """Lists all available prompts."""
-    return [{"id": prompt_id, **prompt_data} for prompt_id, prompt_data in PROMPTS.items()]
+@app.get("/prompts/list", response_model=List[models.Prompt], tags=["Prompt Hub"])
+def list_prompts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    prompts = db.query(sql_models.Prompt).offset(skip).limit(limit).all()
+    return prompts
 
-@app.get("/prompts/{prompt_id}", response_model=Prompt, tags=["Prompt Hub"])
-async def get_prompt(prompt_id: str):
-    """Retrieves a single prompt by its ID."""
-    if prompt_id not in PROMPTS:
-        raise HTTPException(status_code=404, detail="Prompt not found.")
-    return Prompt(id=prompt_id, **PROMPTS[prompt_id])
+@app.get("/prompts/{prompt_id}", response_model=models.Prompt, tags=["Prompt Hub"])
+def get_prompt(prompt_id: int, db: Session = Depends(get_db)):
+    db_prompt = db.query(sql_models.Prompt).filter(sql_models.Prompt.id == prompt_id).first()
+    if db_prompt is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return db_prompt
 
-@app.put("/prompts/{prompt_id}", tags=["Prompt Hub"])
-async def update_prompt(prompt_id: str, request: PromptCreate):
-    """Updates an existing prompt."""
-    if prompt_id not in PROMPTS:
-        raise HTTPException(status_code=404, detail="Prompt not found.")
-    PROMPTS[prompt_id] = request.dict()
-    logger.info(f"Prompt {prompt_id} updated: {request.name}")
-    return {"message": "Prompt updated successfully", "prompt_id": prompt_id, "data": request.dict()}
+@app.put("/prompts/{prompt_id}", response_model=models.Prompt, tags=["Prompt Hub"])
+def update_prompt(prompt_id: int, prompt: models.PromptCreate, db: Session = Depends(get_db)):
+    db_prompt = db.query(sql_models.Prompt).filter(sql_models.Prompt.id == prompt_id).first()
+    if db_prompt is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    for var, value in vars(prompt).items():
+        setattr(db_prompt, var, value) if value else None
+    db.add(db_prompt)
+    db.commit()
+    db.refresh(db_prompt)
+    return db_prompt
 
 @app.delete("/prompts/{prompt_id}", tags=["Prompt Hub"])
-async def delete_prompt(prompt_id: str):
-    """Deletes a prompt."""
-    if prompt_id not in PROMPTS:
-        raise HTTPException(status_code=404, detail="Prompt not found.")
-    del PROMPTS[prompt_id]
-    logger.info(f"Prompt {prompt_id} deleted.")
-    return {"message": "Prompt deleted successfully", "prompt_id": prompt_id}
+def delete_prompt(prompt_id: int, db: Session = Depends(get_db)):
+    db_prompt = db.query(sql_models.Prompt).filter(sql_models.Prompt.id == prompt_id).first()
+    if db_prompt is None:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    db.delete(db_prompt)
+    db.commit()
+    return {"message": f"Prompt {prompt_id} deleted successfully"}

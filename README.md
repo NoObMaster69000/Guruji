@@ -1,6 +1,32 @@
 # Guruji
 Guruji is a MCP server that can generate tools based on your needs and a sophisticated chat bot that can invoke chat with memory and can invoke tools for better performance 
 
+## Database
+
+This project uses SQLAlchemy and Alembic to manage the database. The database is a SQLite database file named `guruji.db` located in the `backend` directory.
+
+### Database Migrations
+
+To initialize the database and apply migrations, run the following commands from the root of the project:
+
+1.  **Initialize the database (first time only):**
+    ```bash
+    cd backend
+    alembic upgrade head
+    ```
+
+2.  **Generate a new migration (after changing the models):**
+    ```bash
+    cd backend
+    alembic revision --autogenerate -m "A descriptive message for the migration"
+    ```
+
+3.  **Apply the new migration:**
+    ```bash
+    cd backend
+    alembic upgrade head
+    ```
+
 ## Backend API
 
 The backend is a FastAPI application that provides a set of APIs for managing chat sessions, tools, knowledge bases, and database connections.
@@ -14,6 +40,18 @@ uvicorn main:app --reload
 ```
 
 The server will be available at `http://localhost:8000`.
+
+### Backend Architecture
+
+The backend has been refactored to use a SQLite database with SQLAlchemy for data persistence. This provides a more robust and scalable solution compared to the previous in-memory storage.
+
+**Key Components:**
+
+*   **`database.py`**: This file sets up the SQLAlchemy engine, session maker, and the declarative base for the ORM models.
+*   **`sql_models.py`**: This file contains the SQLAlchemy ORM models for all the hubs (Knowledge Base, Tools, Database, Prompt). These models define the database schema.
+*   **`models.py`**: This file contains the Pydantic models used for API request and response validation. These models are now configured to work with the SQLAlchemy ORM models.
+*   **`main.py`**: The main FastAPI application file. All the CRUD endpoints have been refactored to use the new database session and ORM models to interact with the database.
+*   **Alembic**: The project now uses Alembic for database migrations. The migration scripts are located in the `backend/alembic/versions` directory.
 
 ### Knowledge Base Hub
 
