@@ -1,7 +1,6 @@
 import React, { FormEvent, KeyboardEvent } from 'react';
 import { Send, Bot, User, Sun, Moon, Trash2, Settings } from 'lucide-react';
 import { HamburgerButton } from './HamburgerButton';
-import { WelcomeScreen } from './WelcomeScreen';
 
 // --- Type Definitions ---
 export type Message = {
@@ -29,8 +28,8 @@ interface ChatViewProps {
   chatbotTitle: string;
   logo: string | null;
   openSettingsModal: () => void;
+
   isSidebarOpen: boolean;
-  userName: string | null;
 }
 
 // =================================================================================
@@ -53,7 +52,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   logo,
   openSettingsModal,
   isSidebarOpen,
-  userName,
 }) => {
   // The selectedKbs prop is now available but not used in this component directly.
   return (
@@ -72,7 +70,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
         messages={messages}
         isTyping={isTyping}
         chatEndRef={chatEndRef}
-        userName={userName}
       />
       <InputBar
         input={input}
@@ -127,18 +124,13 @@ type ChatAreaProps = {
   messages: Message[];
   isTyping: boolean;
   chatEndRef: React.RefObject<HTMLDivElement>;
-  userName: string | null;
 };
 
-const ChatArea: React.FC<ChatAreaProps> = ({ messages, isTyping, chatEndRef, userName }) => (
+const ChatArea: React.FC<ChatAreaProps> = ({ messages, isTyping, chatEndRef }) => (
   <main className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-100 dark:bg-gray-900">
-    {messages.length === 0 ? (
-      <WelcomeScreen userName={userName} />
-    ) : (
-      messages.map((msg) => (
-        <MessageBubble key={msg.id} {...msg} />
-      ))
-    )}
+    {messages.map((msg) => (
+      <MessageBubble key={msg.id} {...msg} />
+    ))}
     {isTyping && <TypingIndicator />}
     <div ref={chatEndRef} />
   </main>

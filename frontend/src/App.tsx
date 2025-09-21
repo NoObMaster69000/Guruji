@@ -144,25 +144,6 @@ const App: React.FC = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeChat?.messages, isTyping]);
 
-  useEffect(() => {
-    const fetchUserName = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/user/name');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setUserName(data.name);
-      } catch (error) {
-        console.error("Failed to fetch user name:", error);
-        setUserName("User");
-      }
-    };
-    if(isLoggedIn) {
-        fetchUserName();
-    }
-  }, [isLoggedIn]);
-
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
     if (input.trim() === '' || !activeChatId) return;
@@ -539,7 +520,6 @@ const App: React.FC = () => {
         chatbotTitle={chatbotTitle}
         logo={logo}
         isSidebarOpen={isSidebarOpen}
-        userName={userName}
       />
       </div>
       <PromptModal
