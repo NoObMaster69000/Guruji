@@ -1,31 +1,11 @@
 import React, { useState } from 'react';
 
 interface LoginPageProps {
-  onLogin: (data: any) => void;
-  onSignup: (data: any) => void;
+  onLogin: () => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSignup }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (authMode === 'login') {
-      // The 'email' state field is used for both email and username on login
-      onLogin({ email: email, password });
-    } else {
-      onSignup({ name, username, email, password });
-    }
-  };
-
-  const handleSSOLogin = () => {
-    // Mock SSO login
-    onLogin({ email: 'sso-user', password: 'sso-password' });
-  }
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
@@ -69,7 +49,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSignup }) => {
           </h2>
 
           {/* Form */}
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
             {authMode === 'signup' && (
               <div className="mb-3">
                 <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" htmlFor="name">
@@ -77,41 +57,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSignup }) => {
                 </label>
                 <input
                   className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  id="Username"
+                  id="name"
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
                   placeholder="John Doe"
-                  required
-                />
-              </div>
-            )}
-            {authMode === 'signup' && (
-              <div className="mb-3">
-                <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" htmlFor="username-signup">
-                  Username
-                </label>
-                <input
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  id="username-signup"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="john.doe"
                   required
                 />
               </div>
             )}
             <div className="mb-3">
               <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-1" htmlFor="email">
-                Email
+                Email Address
               </label>
               <input
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                 id="email"
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="email"
                 placeholder="email@example.com"
                 required
               />
@@ -124,8 +84,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSignup }) => {
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 dark:text-gray-300 dark:bg-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                 id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 placeholder="******************"
                 required
               />
@@ -138,7 +96,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSignup }) => {
                 {authMode === 'login' ? 'Sign In' : 'Sign Up'}
               </button>
             </div>
-          
+          </form>
 
           {/* Separator */}
           <div className="flex items-center my-4">
@@ -150,28 +108,27 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSignup }) => {
           {/* SSO Buttons */}
           <div className="space-y-3">
             <button
-              onClick={handleSSOLogin}
+              onClick={onLogin}
               type="button"
               className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
             >
               <span>Sign in with Organization SSO</span>
             </button>
             <button
-              onClick={handleSSOLogin}
+              onClick={onLogin}
               type="button"
               className="w-full flex items-center justify-center bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
             >
               <span>Sign in with Google</span>
             </button>
             <button
-              onClick={handleSSOLogin}
+              onClick={onLogin}
               type="button"
               className="w-full flex items-center justify-center bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
             >
               <span>Sign in with GitHub</span>
             </button>
           </div>
-          </form>
         </div>
       </div>
     </div>

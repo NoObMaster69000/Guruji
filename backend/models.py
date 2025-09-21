@@ -9,15 +9,6 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 # --- Internal Data Structures for Custom Session Management ---
-class user_signup(BaseModel):
-    name: str
-    username: str
-    email: str
-    password: str
-
-class user_login(BaseModel):
-    login_identifier: str
-    password: str
 
 class ToolCall(BaseModel):
     """Model for a tool call made by an agent."""
@@ -33,24 +24,12 @@ class Message(BaseModel):
     tool_calls: List[ToolCall] = []
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-class MessageCreate(Message):
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-class NewSessionRequest(BaseModel):
-    user_id: Optional[str] = None # Placeholder for now
-
 # --- API Request/Response Models for Custom Endpoints ---
 
 class NewSessionResponse(BaseModel):
     """Response for creating a new session."""
     session_id: str
     created_at: datetime
-
-class ChatSessionInfo(BaseModel):
-    """Model for returning basic chat session info."""
-    id: str = Field(..., alias='session_id')
-    title: str
-    description: Optional[str] = None
 
 class ChatRequest(BaseModel):
     """Request model for the /chat endpoint."""
@@ -100,95 +79,18 @@ class ToolsListResponse(BaseModel):
 
 # --- Knowledge Base Models ---
 
-class KnowledgeBaseBase(BaseModel):
-    user_id: str
+class KnowledgeBaseRequest(BaseModel):
+    """Request model for creating a new Knowledge Base."""
     kb_name: str
     vector_store: str
     allowed_file_types: List[str]
     parsing_library: str
-    embedding_model: str
     chunking_strategy: str
     chunk_size: int
     chunk_overlap: int
     metadata_strategy: str
 
-class KnowledgeBaseCreate(KnowledgeBaseBase):
-    pass
-
-class KnowledgeBase(KnowledgeBaseBase):
-    id: int
-    path: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-# --- Custom Tool Models ---
-
-class CustomToolBase(BaseModel):
+# --- User Models ---
+class UserNameResponse(BaseModel):
+    """Response model for retrieving the user's name."""
     name: str
-    description: str
-    code: str
-
-class CustomToolCreate(CustomToolBase):
-    pass
-
-class CustomTool(CustomToolBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-# --- Prompt Models ---
-
-class PromptBase(BaseModel):
-    name: str
-    text: str
-
-class PromptCreate(PromptBase):
-    pass
-
-class Prompt(PromptBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-# --- Database Models ---
-class DatabaseConnectionBase(BaseModel):
-    name: str
-    db_type: str
-    host: str
-    port: int
-    username: str
-    password: str
-
-class DatabaseConnectionCreate(DatabaseConnectionBase):
-    pass
-
-class DatabaseConnection(DatabaseConnectionBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-# --- Model Provider Settings Models ---
-
-class ModelProviderSettingBase(BaseModel):
-    provider: str
-    api_key: str # This will be sent from frontend, but not always sent back
-    model: str
-    temperature: float
-    max_tokens: int
-    timeout: int
-    max_retries: int
-
-class ModelProviderSettingCreate(ModelProviderSettingBase):
-    user_id: Optional[str] = None # Add user_id for saving
-    pass
-
-class ModelProviderSetting(ModelProviderSettingBase):
-    id: int
-    api_key: Optional[str] = None # Make API key optional when sending to frontend
-
-    class Config:
-        from_attributes = True

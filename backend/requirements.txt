@@ -2,6 +2,3 @@ fastapi
 uvicorn[standard]
 pydantic
 mcp[cli]
-sqlalchemy
-alembic
-aiosqlite
