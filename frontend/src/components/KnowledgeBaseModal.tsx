@@ -21,6 +21,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
   const [vectorStore, setVectorStore] = useState('Chroma');
   const [allowedFileTypes, setAllowedFileTypes] = useState<string[]>([]);
   const [parsingLibrary, setParsingLibrary] = useState('Docling');
+  const [embeddingModel, setEmbeddingModel] = useState('sentence-transformer');
   const [fileMetadata, setFileMetadata] = useState<FileMetadata[]>([]);
   const [chunkingStrategy, setChunkingStrategy] = useState('Recursive');
   const [chunkSize, setChunkSize] = useState(1024);
@@ -36,6 +37,7 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
         vectorStore,
         allowedFileTypes,
         parsingLibrary,
+        embeddingModel,
         chunkingStrategy,
         chunkSize,
         chunkOverlap,
@@ -138,6 +140,29 @@ export const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ isOpen, 
                       </button>
                   ))}
               </div>
+          </div>
+
+          {/* Embedding Model Selection */}
+          <div className="mb-4">
+            <label htmlFor="embeddingModel" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Embedding Model
+            </label>
+            <select
+              id="embeddingModel"
+              value={embeddingModel}
+              onChange={(e) => setEmbeddingModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            >
+              <optgroup label="Free">
+                <option value="sentence-transformer">sentence-transformer</option>
+              </optgroup>
+              <optgroup label="OpenAI">
+                <option value="text-embedding-ada-002">text-embedding-ada-002</option>
+              </optgroup>
+              <optgroup label="Gemini">
+                <option value="gemma">gemma</option>
+              </optgroup>
+            </select>
           </div>
 
           {/* Chunking Strategy */}

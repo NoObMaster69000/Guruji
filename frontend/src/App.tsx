@@ -59,7 +59,7 @@ const App: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256); // Add this state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -86,17 +86,48 @@ const App: React.FC = () => {
 
   // Initialize with a default chat session
   useEffect(() => {
-    if (chatSessions.length === 0) {
-      const newId = uuidv4();
-      setChatSessions([{ id: newId, title: 'New Chat', messages: [] }]);
-      setActiveChatId(newId);
-    }
-  }, [chatSessions.length]);
-
-  // Apply dark mode
-  useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
+
+  // Fetch model settings on initial load
+  useEffect(() => {
+    const fetchChatSessions = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/sessions');
+        if (response.ok) {
+          const sessions: ChatSession[] = await response.json();
+          if (sessions.length > 0) {
+            setChatSessions(sessions.map(s => ({ ...s, messages: [] }))); // Messages will be fetched on demand
+            setActiveChatId(sessions[0].id);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch chat sessions:", error);
+      }
+    };
+
+    const fetchModelSettings = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/settings/model');
+        if (response.ok) {
+          const savedSettings: (ModelSettings & { provider: ModelProvider, api_key: string })[] = await response.json();
+          // For simplicity, just load the first saved setting if available
+          if (savedSettings.length > 0) {
+            const firstSetting = savedSettings[0];
+            setCurrentModel(firstSetting.provider);
+            setModelSettings({ model: firstSetting.model, temperature: firstSetting.temperature, max_tokens: firstSetting.max_tokens, timeout: firstSetting.timeout, max_retries: firstSetting.max_retries });
+            // We don't get the API key back, so we don't set it here.
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch model settings:", error);
+      }
+    };
+    if (isLoggedIn) {
+      fetchChatSessions();
+      fetchModelSettings();
+    }
+  }, [isLoggedIn]);
 
   // Apply theme color
   useEffect(() => {
@@ -214,15 +245,22 @@ const App: React.FC = () => {
     }
   };
 
-  const handleNewChat = () => {
-    const newId = uuidv4();
-    const newChat: ChatSession = {
-      id: newId,
-      title: 'New Chat',
-      messages: [],
-    };
-    setChatSessions(prev => [newChat, ...prev]);
-    setActiveChatId(newId);
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/new-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}), // Sending an empty body for now
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const newChat: ChatSession = { id: data.session_id, title: 'New Chat', messages: [] };
+        setChatSessions(prev => [newChat, ...prev]);
+        setActiveChatId(data.session_id);
+      }
+    } catch (error) {
+      console.error("Failed to create new session:", error);
+    }
   };
 
   const handleSelectChat = (id: string) => {
@@ -250,11 +288,28 @@ const App: React.FC = () => {
     );
   };
 
-  const handleSaveModelSelection = (provider: ModelProvider, keys: ApiKeys, settings: ModelSettings) => {
+  const handleSaveModelSelection = async (provider: ModelProvider, keys: ApiKeys, settings: ModelSettings) => {
     setCurrentModel(provider);
     setApiKeys(keys);
     setModelSettings(settings);
-    // Here you might want to save keys to localStorage for persistence
+
+    const payload = {
+      provider,
+      api_key: keys[provider] || '',
+      user_id: authToken, // Pass the user's ID
+      ...settings,
+    };
+
+    try {
+      await fetch('http://localhost:8000/settings/model', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      // Optionally show a success message
+    } catch (error) {
+      console.error("Failed to save model settings:", error);
+    }
   };
 
   // --- Database Connection Handlers ---
@@ -351,10 +406,12 @@ const App: React.FC = () => {
     // just the metadata. A real implementation would use FormData
     // and a different content-type.
     const payload = {
+      user_id: authToken, // Add the user's ID to the payload
       kb_name: data.kbName,
       vector_store: data.vectorStore,
       allowed_file_types: data.allowedFileTypes,
       parsing_library: data.parsingLibrary,
+      embedding_model: data.embeddingModel,
       chunking_strategy: data.chunkingStrategy,
       chunk_size: data.chunkSize,
       chunk_overlap: data.chunkOverlap,
@@ -383,14 +440,49 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
+  const handleLogin = async (data: any) => {
+    try {
+      const response = await fetch('http://localhost:8000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login_identifier: data.email, password: data.password }),
+      });
+      const responseData = await response.json();
+      if (response.ok) {
+        setAuthToken(responseData.access_token);
+        setIsLoggedIn(true);
+      } else {
+        alert(`Login failed: ${responseData.detail}`);
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("An error occurred during login.");
+    }
+  };
+
+  const handleSignup = async (data: any) => {
+    try {
+      const response = await fetch('http://localhost:8000/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name, username: data.username, email: data.email, password: data.password }),
+      });
+      if (response.ok) {
+        alert("Signup successful! Please log in.");
+      } else {
+        const errorData = await response.json();
+        alert(`Signup failed: ${errorData.detail}`);
+      }
+    } catch (error) {
+      console.error("Signup error:", error);
+      alert("An error occurred during signup.");
+    }
   };
 
   // --- Render ---
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={handleLogin} onSignup={handleSignup} />;
   }
 
   return (
