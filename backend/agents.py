@@ -4,7 +4,7 @@ Agent definitions and routing logic for the MCP Server.
 import re
 from typing import List, Optional
 
-from backend.models import AgentDetail
+from models import AgentDetail
 
 # Agent Definitions
 AGENTS = {
