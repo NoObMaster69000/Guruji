@@ -59,6 +59,7 @@ const App: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256); // Add this state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
   const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -111,6 +112,25 @@ const App: React.FC = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeChat?.messages, isTyping]);
+
+  useEffect(() => {
+    const fetchUserName = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/user/name');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setUserName(data.name);
+      } catch (error) {
+        console.error("Failed to fetch user name:", error);
+        setUserName("User");
+      }
+    };
+    if(isLoggedIn) {
+        fetchUserName();
+    }
+  }, [isLoggedIn]);
 
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
@@ -427,6 +447,7 @@ const App: React.FC = () => {
         chatbotTitle={chatbotTitle}
         logo={logo}
         isSidebarOpen={isSidebarOpen}
+        userName={userName}
       />
       </div>
       <PromptModal

@@ -89,3 +89,8 @@ class KnowledgeBaseRequest(BaseModel):
     chunk_size: int
     chunk_overlap: int
     metadata_strategy: str
+
+# --- User Models ---
+class UserNameResponse(BaseModel):
+    """Response model for retrieving the user's name."""
+    name: str

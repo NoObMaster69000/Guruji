@@ -18,7 +18,7 @@ from mcp.server.fastmcp import FastMCP
 from models import (
     Message, ToolCall, NewSessionResponse, ChatRequest, ChatResponse,
     HistoryResponse, AgentsListResponse, ToolsListResponse, ToolDetail,
-    KnowledgeBaseRequest
+    KnowledgeBaseRequest, UserNameResponse
 )
 from tools import add_tools
 from agents import select_agent, get_agents_list, AgentDetail
@@ -206,6 +206,12 @@ async def list_tools():
             )
         )
     return ToolsListResponse(tools=tools_list)
+
+@app.get("/user/name", response_model=UserNameResponse, tags=["User"])
+async def get_user_name():
+    """Retrieves the user's name."""
+    return UserNameResponse(name="Abhinav")
+
 
 @app.post("/kb/create", tags=["Knowledge Base"])
 async def create_knowledge_base(request: KnowledgeBaseRequest):
