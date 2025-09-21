@@ -1,12 +1,13 @@
 """
 Refactored main FastAPI application for the MCP server.
 """
+import os
 import re
 import uuid
 import time
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,16 +18,22 @@ from sqlalchemy.orm import Session
 import sql_models as sql_models
 import models as models
 from database import SessionLocal, engine, Base
+from database import VECTOR_STORE_DIR
 from tools import add_tools
 from agents import select_agent, get_agents_list, AgentDetail
 from security import verify_password, get_password_hash
 
-# Create all tables
+# Create all tables (This is now handled by Alembic migrations)
 Base.metadata.create_all(bind=engine)
 
 # --- Application Setup ---
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
 logger = logging.getLogger(__name__)
 
 # Dependency
@@ -83,9 +90,10 @@ def get_session_history(session_id: str, db: Session) -> List[sql_models.ChatMes
 
     return session.messages
 
-def add_message_to_history(session_id: str, message: models.Message, db: Session):
+def add_message_to_history(session_id: str, user_id: str, message: models.Message, db: Session):
     """Adds a message to a session's history in the database."""
-    db_message = sql_models.ChatMessage(**message.model_dump(), session_id=session_id)
+    # In a real app, user_id would come from an auth token
+    db_message = sql_models.ChatMessage(**message.model_dump(), session_id=session_id, user_id=user_id)
     db.add(db_message)
     db.commit()
 
@@ -177,29 +185,53 @@ async def login(user: models.user_login, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     if not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
-    return {"message": "Login successful"}
+    # In a real app, you would generate a JWT token here.
+    # For now, we'll use the user's ID as a simple token.
+    access_token = str(db_user.id)
+    return {"message": "Login successful", "access_token": access_token, "user_id": access_token}
 
 
 @app.post("/new-session", response_model=models.NewSessionResponse, tags=["Session Management"])
 async def new_session(db: Session = Depends(get_db)):
     """Creates a new chat session."""
     session_id = str(uuid.uuid4())
-    new_db_session = sql_models.ChatSession(session_id=session_id, title="New Chat")
+    # In a real app, user_id would come from an auth token.
+    # For now, we'll use a placeholder or the first user.
+    user = db.query(sql_models.user_registry).first()
+    if not user:
+        # To make this work without a user, we can create a placeholder if none exist
+        # This is not ideal for production but good for development.
+        raise HTTPException(status_code=500, detail="No users found in the database. Please sign up a user first.")
+    new_db_session = sql_models.ChatSession(user_id=user.id, session_id=session_id, title="New Chat")
     db.add(new_db_session)
     db.commit()
     db.refresh(new_db_session)
-    logger.info(f"New session created: {session_id}")
+    logger.info(f"User {user.username} started a new session: {session_id}")
     return models.NewSessionResponse(session_id=session_id, created_at=new_db_session.created_at)
+
+@app.get("/sessions", response_model=List[models.ChatSessionInfo], tags=["Session Management"])
+async def get_sessions(db: Session = Depends(get_db)):
+    """Retrieves all chat sessions for the current user."""
+    # In a real app, user_id would come from an auth token.
+    # For now, we'll use a placeholder for the first user.
+    user = db.query(sql_models.user_registry).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No users found in the database.")
+
+    sessions = db.query(sql_models.ChatSession).filter(sql_models.ChatSession.user_id == user.id).order_by(sql_models.ChatSession.created_at.desc()).all()
+    return sessions
 
 @app.post("/chat", response_model=models.ChatResponse, tags=["Chat"])
 async def chat(request: models.ChatRequest, db: Session = Depends(get_db)):
     """Handles a user message and returns an agent's reply."""
     # Ensure session exists
-    get_session_history(request.session_id, db)
+    session = db.query(sql_models.ChatSession).filter(sql_models.ChatSession.session_id == request.session_id and sql_models.ChatSession.user_id == request.user_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
     # 1. Add user message to history
     user_message = models.Message(role="user", content=request.message)
-    add_message_to_history(request.session_id, user_message, db)
+    add_message_to_history(request.session_id, session.user_id, user_message, db)
 
     # 2. Select agent and run logic
     agent = select_agent(request.message, request.agent)
@@ -212,7 +244,7 @@ async def chat(request: models.ChatRequest, db: Session = Depends(get_db)):
         agent_used=agent.name,
         tool_calls=tool_calls,
     )
-    add_message_to_history(request.session_id, assistant_message, db)
+    add_message_to_history(request.session_id, session.user_id, assistant_message, db)
 
     logger.info(f"Session {request.session_id}: Agent '{agent.name}' replied.")
 
@@ -410,3 +442,37 @@ def delete_prompt(prompt_id: int, db: Session = Depends(get_db)):
     db.delete(db_prompt)
     db.commit()
     return {"message": f"Prompt {prompt_id} deleted successfully"}
+
+@app.put("/settings/model", response_model=models.ModelProviderSetting, tags=["Settings"])
+def save_model_provider_setting(setting: models.ModelProviderSettingCreate, db: Session = Depends(get_db)):
+    """Saves or updates a model provider's settings, including API key."""
+    if not setting.user_id:
+        raise HTTPException(status_code=400, detail="User ID is required to save model settings.")
+
+    db_setting = db.query(sql_models.ModelProviderSetting).filter_by(provider=setting.provider, user_id=setting.user_id).first()
+
+    if db_setting:
+        # Update existing setting
+        db_setting.api_key = setting.api_key or db_setting.api_key
+        db_setting.model = setting.model
+        db_setting.temperature = setting.temperature
+        db_setting.max_tokens = setting.max_tokens
+        db_setting.timeout = setting.timeout
+        db_setting.max_retries = setting.max_retries
+    else:
+        # Create new setting
+        db_setting = sql_models.ModelProviderSetting(**setting.model_dump())
+        db.add(db_setting)
+    db.commit()
+    db.refresh(db_setting)
+    return db_setting
+
+@app.get("/settings/model", response_model=List[models.ModelProviderSetting], tags=["Settings"])
+def get_model_provider_settings(db: Session = Depends(get_db)):
+    """Retrieves all saved model provider settings."""
+    db_settings = db.query(sql_models.ModelProviderSetting).all()
+    # For security, don't return the API keys
+    response_settings = []
+    for s in db_settings:
+        response_settings.append(models.ModelProviderSetting.from_orm(s))
+    return response_settings

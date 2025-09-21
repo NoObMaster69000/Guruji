@@ -36,12 +36,21 @@ class Message(BaseModel):
 class MessageCreate(Message):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
+class NewSessionRequest(BaseModel):
+    user_id: Optional[str] = None # Placeholder for now
+
 # --- API Request/Response Models for Custom Endpoints ---
 
 class NewSessionResponse(BaseModel):
     """Response for creating a new session."""
     session_id: str
     created_at: datetime
+
+class ChatSessionInfo(BaseModel):
+    """Model for returning basic chat session info."""
+    id: str = Field(..., alias='session_id')
+    title: str
+    description: Optional[str] = None
 
 class ChatRequest(BaseModel):
     """Request model for the /chat endpoint."""
@@ -92,10 +101,12 @@ class ToolsListResponse(BaseModel):
 # --- Knowledge Base Models ---
 
 class KnowledgeBaseBase(BaseModel):
+    user_id: str
     kb_name: str
     vector_store: str
     allowed_file_types: List[str]
     parsing_library: str
+    embedding_model: str
     chunking_strategy: str
     chunk_size: int
     chunk_overlap: int
@@ -143,7 +154,6 @@ class Prompt(PromptBase):
         from_attributes = True
 
 # --- Database Models ---
-
 class DatabaseConnectionBase(BaseModel):
     name: str
     db_type: str
@@ -157,6 +167,28 @@ class DatabaseConnectionCreate(DatabaseConnectionBase):
 
 class DatabaseConnection(DatabaseConnectionBase):
     id: int
+
+    class Config:
+        from_attributes = True
+
+# --- Model Provider Settings Models ---
+
+class ModelProviderSettingBase(BaseModel):
+    provider: str
+    api_key: str # This will be sent from frontend, but not always sent back
+    model: str
+    temperature: float
+    max_tokens: int
+    timeout: int
+    max_retries: int
+
+class ModelProviderSettingCreate(ModelProviderSettingBase):
+    user_id: Optional[str] = None # Add user_id for saving
+    pass
+
+class ModelProviderSetting(ModelProviderSettingBase):
+    id: int
+    api_key: Optional[str] = None # Make API key optional when sending to frontend
 
     class Config:
         from_attributes = True

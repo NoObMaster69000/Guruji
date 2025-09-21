@@ -1,1 +1,9 @@
 Generic single-database configuration.
+
+alembic revision --autogenerate -m "Initial migration with all tables"
+
+alembic upgrade head
+
+alembic downgrade -1
+
+For more details, refer to the Alembic documentation: https://alembic.sqlalchemy.org/en/latest/
