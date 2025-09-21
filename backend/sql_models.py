@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, JSON
-from backend.database import Base
+from database import Base
 
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_bases"
