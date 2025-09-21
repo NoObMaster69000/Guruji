@@ -1,5 +1,17 @@
-from sqlalchemy import Column, Integer, String, Text, JSON
+from sqlalchemy import Column, Integer, String, Text, JSON, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
 from database import Base
+from datetime import datetime
+
+
+class user_registry(Base):
+    __tablename__ = "user_registry"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    username = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True)
+    password = Column(String) # In a real application, store hashed passwords!
 
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_bases"
@@ -13,6 +25,7 @@ class KnowledgeBase(Base):
     chunk_size = Column(Integer)
     chunk_overlap = Column(Integer)
     metadata_strategy = Column(String)
+    path = Column(String) # Path to the persisted vector store
 
 class CustomTool(Base):
     __tablename__ = "custom_tools"
@@ -39,3 +52,24 @@ class Prompt(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     text = Column(Text)
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, index=True)
+    title = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    messages = relationship("ChatMessage", back_populates="session")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, ForeignKey("chat_sessions.session_id"))
+    role = Column(String)
+    content = Column(Text)
+    agent_used = Column(String, nullable=True)
+    tool_calls = Column(JSON, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    session = relationship("ChatSession", back_populates="messages")

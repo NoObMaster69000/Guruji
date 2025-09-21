@@ -362,14 +362,48 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
+  const handleLogin = async (data: any) => {
+    try {
+      const response = await fetch('http://localhost:8000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login_identifier: data.email, password: data.password }),
+      });
+      if (response.ok) {
+        setIsLoggedIn(true);
+      } else {
+        const errorData = await response.json();
+        alert(`Login failed: ${errorData.detail}`);
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("An error occurred during login.");
+    }
+  };
+
+  const handleSignup = async (data: any) => {
+    try {
+      const response = await fetch('http://localhost:8000/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name, username: data.username, email: data.email, password: data.password }),
+      });
+      if (response.ok) {
+        alert("Signup successful! Please log in.");
+      } else {
+        const errorData = await response.json();
+        alert(`Signup failed: ${errorData.detail}`);
+      }
+    } catch (error) {
+      console.error("Signup error:", error);
+      alert("An error occurred during signup.");
+    }
   };
 
   // --- Render ---
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={handleLogin} onSignup={handleSignup} />;
   }
 
   return (

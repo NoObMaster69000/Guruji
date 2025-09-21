@@ -1,19 +1,17 @@
 """
 Refactored main FastAPI application for the MCP server.
-
-This version uses the `mcp` SDK, re-introduces session management,
-and restores all originally requested endpoints.
 """
 import re
 import uuid
 import time
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import sql_models as sql_models
@@ -21,6 +19,7 @@ import models as models
 from database import SessionLocal, engine, Base
 from tools import add_tools
 from agents import select_agent, get_agents_list, AgentDetail
+from security import verify_password, get_password_hash
 
 # Create all tables
 Base.metadata.create_all(bind=engine)
@@ -29,11 +28,6 @@ Base.metadata.create_all(bind=engine)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# --- In-Memory Storage ---
-SESSIONS: Dict[str, List] = {}
-SESSION_METADATA: Dict[str, datetime] = {}
-SESSION_EXPIRATION = timedelta(hours=1)
 
 # Dependency
 def get_db():
@@ -78,19 +72,22 @@ app.add_middleware(
 # A compliant MCP client would connect to this endpoint (e.g., http://localhost:8000/mcp)
 app.mount("/mcp", mcp_server.streamable_http_app())
 
-def get_session_history(session_id: str) -> List[models.Message]:
+def get_session_history(session_id: str, db: Session) -> List[sql_models.ChatMessage]:
     """Retrieves a session history or raises HTTPException if not found or expired."""
-    if session_id not in SESSIONS or session_id not in SESSION_METADATA:
+    session = db.query(sql_models.ChatSession).filter(sql_models.ChatSession.session_id == session_id).first()
+    if not session:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
 
-    last_accessed = SESSION_METADATA[session_id]
-    if datetime.utcnow() - last_accessed > SESSION_EXPIRATION:
-        del SESSIONS[session_id]
-        del SESSION_METADATA[session_id]
-        raise HTTPException(status_code=404, detail="Session has expired.")
+    # Optional: Add session expiration logic here if needed
+    # For example, check session.created_at
 
-    SESSION_METADATA[session_id] = datetime.utcnow()
-    return SESSIONS[session_id]
+    return session.messages
+
+def add_message_to_history(session_id: str, message: models.Message, db: Session):
+    """Adds a message to a session's history in the database."""
+    db_message = sql_models.ChatMessage(**message.model_dump(), session_id=session_id)
+    db.add(db_message)
+    db.commit()
 
 # --- Mock Agent and Tool-Calling Logic ---
 
@@ -157,23 +154,52 @@ def run_agent_logic(agent: models.AgentDetail, message: str, selected_kbs: List[
 
 # --- Custom FastAPI Endpoints ---
 
+@app.post("/signup", tags=["Authentication"])
+async def register_user(user: models.user_signup, db: Session = Depends(get_db)):
+    """Registers a new user."""
+    db_user = db.query(sql_models.user_registry).filter(sql_models.user_registry.username == user.username.lower()).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    hashed_password = get_password_hash(user.password)
+    db_user = sql_models.user_registry(name = user.name, username=user.username.lower(), email=user.email.lower(), password=hashed_password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return {"message": "User registered successfully"}
+
+@app.post("/login", tags=["Authentication"])
+async def login(user: models.user_login, db: Session = Depends(get_db)):
+    """Logs in a user."""
+    db_user = db.query(sql_models.user_registry).filter(
+        or_(sql_models.user_registry.username == user.login_identifier.lower(), sql_models.user_registry.email == user.login_identifier.lower())
+    ).first()
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    if not verify_password(user.password, db_user.password):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    return {"message": "Login successful"}
+
+
 @app.post("/new-session", response_model=models.NewSessionResponse, tags=["Session Management"])
-async def new_session():
+async def new_session(db: Session = Depends(get_db)):
     """Creates a new chat session."""
     session_id = str(uuid.uuid4())
-    SESSIONS[session_id] = []
-    SESSION_METADATA[session_id] = datetime.utcnow()
+    new_db_session = sql_models.ChatSession(session_id=session_id, title="New Chat")
+    db.add(new_db_session)
+    db.commit()
+    db.refresh(new_db_session)
     logger.info(f"New session created: {session_id}")
-    return models.NewSessionResponse(session_id=session_id, created_at=SESSION_METADATA[session_id])
+    return models.NewSessionResponse(session_id=session_id, created_at=new_db_session.created_at)
 
 @app.post("/chat", response_model=models.ChatResponse, tags=["Chat"])
 async def chat(request: models.ChatRequest, db: Session = Depends(get_db)):
     """Handles a user message and returns an agent's reply."""
-    history = get_session_history(request.session_id)
+    # Ensure session exists
+    get_session_history(request.session_id, db)
 
     # 1. Add user message to history
     user_message = models.Message(role="user", content=request.message)
-    history.append(user_message)
+    add_message_to_history(request.session_id, user_message, db)
 
     # 2. Select agent and run logic
     agent = select_agent(request.message, request.agent)
@@ -186,7 +212,7 @@ async def chat(request: models.ChatRequest, db: Session = Depends(get_db)):
         agent_used=agent.name,
         tool_calls=tool_calls,
     )
-    history.append(assistant_message)
+    add_message_to_history(request.session_id, assistant_message, db)
 
     logger.info(f"Session {request.session_id}: Agent '{agent.name}' replied.")
 
@@ -198,9 +224,9 @@ async def chat(request: models.ChatRequest, db: Session = Depends(get_db)):
     )
 
 @app.get("/history/{session_id}", response_model=models.HistoryResponse, tags=["Session Management"])
-async def get_history(session_id: str):
+async def get_history(session_id: str, db: Session = Depends(get_db)):
     """Retrieves the full chat history for a session."""
-    history = get_session_history(session_id)
+    history = get_session_history(session_id, db)
     return models.HistoryResponse(session_id=session_id, history=history)
 
 @app.get("/agents", response_model=models.AgentsListResponse, tags=["Discovery"])
@@ -225,7 +251,7 @@ async def list_tools(db: Session = Depends(get_db)):
 
 @app.post("/tools/create", response_model=models.CustomTool, tags=["Tools Hub"])
 def create_custom_tool(tool: models.CustomToolCreate, db: Session = Depends(get_db)):
-    db_tool = sql_models.CustomTool(**tool.dict())
+    db_tool = sql_models.CustomTool(**tool.model_dump())
     db.add(db_tool)
     db.commit()
     db.refresh(db_tool)
@@ -262,7 +288,7 @@ def delete_custom_tool(tool_id: int, db: Session = Depends(get_db)):
 
 @app.post("/kb/create", response_model=models.KnowledgeBase, tags=["Knowledge Base"])
 def create_knowledge_base(kb: models.KnowledgeBaseCreate, db: Session = Depends(get_db)):
-    db_kb = sql_models.KnowledgeBase(**kb.dict())
+    db_kb = sql_models.KnowledgeBase(**kb.model_dump())
     db.add(db_kb)
     db.commit()
     db.refresh(db_kb)
@@ -304,7 +330,7 @@ def delete_knowledge_base(kb_id: int, db: Session = Depends(get_db)):
 
 @app.post("/databases/create", response_model=models.DatabaseConnection, tags=["Database Hub"])
 def create_database_connection(db_conn: models.DatabaseConnectionCreate, db: Session = Depends(get_db)):
-    db_db_conn = sql_models.DatabaseConnection(**db_conn.dict())
+    db_db_conn = sql_models.DatabaseConnection(**db_conn.model_dump())
     db.add(db_db_conn)
     db.commit()
     db.refresh(db_db_conn)
@@ -346,7 +372,7 @@ def delete_database_connection(db_id: int, db: Session = Depends(get_db)):
 
 @app.post("/prompts/create", response_model=models.Prompt, tags=["Prompt Hub"])
 def create_prompt(prompt: models.PromptCreate, db: Session = Depends(get_db)):
-    db_prompt = sql_models.Prompt(**prompt.dict())
+    db_prompt = sql_models.Prompt(**prompt.model_dump())
     db.add(db_prompt)
     db.commit()
     db.refresh(db_prompt)

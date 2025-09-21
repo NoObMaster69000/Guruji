@@ -9,6 +9,15 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 # --- Internal Data Structures for Custom Session Management ---
+class user_signup(BaseModel):
+    name: str
+    username: str
+    email: str
+    password: str
+
+class user_login(BaseModel):
+    login_identifier: str
+    password: str
 
 class ToolCall(BaseModel):
     """Model for a tool call made by an agent."""
@@ -22,6 +31,9 @@ class Message(BaseModel):
     content: str
     agent_used: Optional[str] = None
     tool_calls: List[ToolCall] = []
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class MessageCreate(Message):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 # --- API Request/Response Models for Custom Endpoints ---
@@ -94,7 +106,7 @@ class KnowledgeBaseCreate(KnowledgeBaseBase):
 
 class KnowledgeBase(KnowledgeBaseBase):
     id: int
-    path: str
+    path: Optional[str] = None
 
     class Config:
         from_attributes = True
