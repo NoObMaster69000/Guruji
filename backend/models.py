@@ -92,6 +92,19 @@ class CustomToolCreate(BaseModel):
     description: str
     code: str
 
+# --- Prompt Models ---
+
+class Prompt(BaseModel):
+    """Model for a prompt."""
+    id: str
+    name: str
+    text: str
+
+class PromptCreate(BaseModel):
+    """Request model for creating a new prompt."""
+    name: str
+    text: str
+
 # --- Database Models ---
 
 class DatabaseConnection(BaseModel):

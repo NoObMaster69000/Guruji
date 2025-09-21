@@ -76,6 +76,33 @@ The Tools Hub allows you to create, manage, and use custom tools.
 
 *   **`DELETE /tools/{tool_id}`**: Deletes a custom tool.
 
+### Prompt Hub
+
+The Prompt Hub allows you to manage prompts that can be used in the chat.
+
+**Endpoints:**
+
+*   **`POST /prompts/create`**: Creates a new prompt.
+    *   **Request Body:** `PromptCreate` model.
+    *   **Example:**
+        ```bash
+        curl -X POST http://localhost:8000/prompts/create \
+        -H "Content-Type: application/json" \
+        -d '{
+          "name": "My Prompt",
+          "text": "This is my custom prompt."
+        }'
+        ```
+
+*   **`GET /prompts/list`**: Lists all available prompts.
+
+*   **`GET /prompts/{prompt_id}`**: Retrieves a single prompt by its ID.
+
+*   **`PUT /prompts/{prompt_id}`**: Updates an existing prompt.
+    *   **Request Body:** `PromptCreate` model.
+
+*   **`DELETE /prompts/{prompt_id}`**: Deletes a prompt.
+
 ### Database Hub
 
 The Database Hub allows you to manage database connection configurations.

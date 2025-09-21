@@ -19,7 +19,7 @@ from models import (
     Message, ToolCall, NewSessionResponse, ChatRequest, ChatResponse,
     HistoryResponse, AgentsListResponse, ToolsListResponse, ToolDetail,
     KnowledgeBaseRequest, KnowledgeBase, CustomTool, CustomToolCreate,
-    DatabaseConnection, DatabaseConnectionCreate
+    DatabaseConnection, DatabaseConnectionCreate, Prompt, PromptCreate
 )
 from tools import add_tools
 from agents import select_agent, get_agents_list, AgentDetail
@@ -37,6 +37,7 @@ SESSION_EXPIRATION = timedelta(hours=1)
 KNOWLEDGE_BASES: Dict[str, Dict] = {}
 CUSTOM_TOOLS: Dict[str, Dict] = {}
 DATABASES: Dict[str, Dict] = {}
+PROMPTS: Dict[str, Dict] = {}
 
 # 1. Create the MCP Server instance and add tools
 mcp_server = FastMCP(
@@ -325,3 +326,43 @@ async def delete_database_connection(db_id: str):
     del DATABASES[db_id]
     logger.info(f"Database connection {db_id} deleted.")
     return {"message": "Database connection deleted successfully", "db_id": db_id}
+
+# --- Prompt Hub Endpoints ---
+
+@app.post("/prompts/create", tags=["Prompt Hub"])
+async def create_prompt(request: PromptCreate):
+    """Creates a new prompt."""
+    prompt_id = str(uuid.uuid4())
+    PROMPTS[prompt_id] = request.dict()
+    logger.info(f"New prompt created: {request.name} (ID: {prompt_id})")
+    return {"message": "Prompt created successfully", "prompt_id": prompt_id, "data": request.dict()}
+
+@app.get("/prompts/list", tags=["Prompt Hub"])
+async def list_prompts():
+    """Lists all available prompts."""
+    return [{"id": prompt_id, **prompt_data} for prompt_id, prompt_data in PROMPTS.items()]
+
+@app.get("/prompts/{prompt_id}", response_model=Prompt, tags=["Prompt Hub"])
+async def get_prompt(prompt_id: str):
+    """Retrieves a single prompt by its ID."""
+    if prompt_id not in PROMPTS:
+        raise HTTPException(status_code=404, detail="Prompt not found.")
+    return Prompt(id=prompt_id, **PROMPTS[prompt_id])
+
+@app.put("/prompts/{prompt_id}", tags=["Prompt Hub"])
+async def update_prompt(prompt_id: str, request: PromptCreate):
+    """Updates an existing prompt."""
+    if prompt_id not in PROMPTS:
+        raise HTTPException(status_code=404, detail="Prompt not found.")
+    PROMPTS[prompt_id] = request.dict()
+    logger.info(f"Prompt {prompt_id} updated: {request.name}")
+    return {"message": "Prompt updated successfully", "prompt_id": prompt_id, "data": request.dict()}
+
+@app.delete("/prompts/{prompt_id}", tags=["Prompt Hub"])
+async def delete_prompt(prompt_id: str):
+    """Deletes a prompt."""
+    if prompt_id not in PROMPTS:
+        raise HTTPException(status_code=404, detail="Prompt not found.")
+    del PROMPTS[prompt_id]
+    logger.info(f"Prompt {prompt_id} deleted.")
+    return {"message": "Prompt deleted successfully", "prompt_id": prompt_id}
