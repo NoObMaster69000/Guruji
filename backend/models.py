@@ -89,8 +89,11 @@ class KnowledgeBaseRequest(BaseModel):
     chunk_size: int
     chunk_overlap: int
     metadata_strategy: str
+<<<<<<< HEAD
 
 # --- User Models ---
 class UserNameResponse(BaseModel):
     """Response model for retrieving the user's name."""
     name: str
+=======
+>>>>>>> parent of 2046c95 (Merge pull request #15 from NoObMaster69000/backend-hubs-1)

@@ -59,7 +59,10 @@ const App: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256); // Add this state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+<<<<<<< HEAD
   const [userName, setUserName] = useState<string | null>(null);
+=======
+>>>>>>> parent of 2046c95 (Merge pull request #15 from NoObMaster69000/backend-hubs-1)
   const [selectedKbs, setSelectedKbs] = useState<string[]>([]);
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
