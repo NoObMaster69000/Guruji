@@ -57,6 +57,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(256); // Add this state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
